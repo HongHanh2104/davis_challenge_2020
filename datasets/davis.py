@@ -9,6 +9,7 @@ from enum import Enum
 import os
 import random
 
+
 class NormMaxMin():
     def __call__(self, x):
         return (x.float() - torch.min(x)) / (torch.max(x) - torch.min(x))
@@ -19,12 +20,12 @@ class DAVISLoader(data.Dataset):
                 phase="train",
                 resolution="480p",
                 imageset_folder=None,
-                image_folder=None):
+                annotation_folder=None):
         super().__init__()
 
         assert root_path is not None, "Missing root path, should be a path DAVIS dataset!"
         assert imageset_folder is not None, "Missing imageSet folder!"
-        assert image_folder is not None, "Missing JPEGImages folder!"
+        assert annotation_folder is not None, "Missing Annotation folder!"
         
         self.root_path = Path(root_path)
         
@@ -36,48 +37,67 @@ class DAVISLoader(data.Dataset):
         # Load video name
         with open(txt_path) as files:
             self.video_names = [filename.strip() for filename in files]
-            
-        self.image_path = self.root_path / phase / image_folder / resolution 
+
+        self.annotation_path = self.root_path / phase / annotation_folder / resolution 
         self.frame_list = []
+
         for video_name in self.video_names:
-            for filename in sorted(os.listdir(str(self.image_path / video_name))):
-                img = video_name + "/" + filename
-                ann = img.replace("jpg", "png")
-                self.frame_list.append([img, ann])
+            png_pair = self.get_frame("2", video_name)
+
+            for pair in png_pair:
+                support_anno = "bear" + "/" + pair[0]
+                query_anno = "bear" + "/" + pair[1]
+                self.frame_list.append((support_anno, query_anno))
+            
+        
+    def get_frame(self, mode, video_name):
+        from itertools import permutations
+        
+        images = sorted(os.listdir(str(self.annotation_path / video_name)))
+        
+        mode_map = {
+            "1": list(permutations(images, 2)),
+            "2": [(images[0], images[i]) for i in range(1, len(images))],
+            "3": [(i, j) for i in images for j in images if i < j]
+        }
+
+        return mode_map[mode]
+       
             
     def __getitem__(self, inx):
-        support_name = self.frame_list[inx][0]
-        anno_name = self.frame_list[inx][1]
-
-        pair_list = self.get_pair_list()
-        query_img_list = pair_list[anno_name.split('/')[0]]
+        support_anno_name = self.frame_list[inx][0]
+        support_img_name = support_anno_name.replace("png", "jpg")
+        query_anno_name = self.frame_list[inx][1]
+        query_img_name = query_anno_name.replace("png", "jpg")
         
-        while True:
-            query_name = query_img_list[random.randint(0, len(query_img_list) - 1)]
-            if query_name != support_name:
-                break
-        
-        support_img = Image.open(str(self.image_path / support_name)).convert('RGB')
+        support_img = Image.open(str(self.annotation_path / support_img_name).replace("Annotations", "JPEGImages")).convert('RGB')
         support_arr = np.array(support_img)
         support_img_tf = tvtf.Compose([
             NormMaxMin()
         ])  #np.array(support_name)
         support_img = support_img_tf(torch.Tensor(support_arr)).unsqueeze(0)
         
-        query_img = Image.open(str(self.image_path / query_name)).convert('RGB')
+        query_img = Image.open(str(self.annotation_path / query_img_name).replace("Annotations", "JPEGImages")).convert('RGB')
         query_arr = np.array(query_img)
         query_img_tf = tvtf.Compose([
             NormMaxMin()
         ])
         query_img = query_img_tf(torch.Tensor(query_arr)).unsqueeze(0)
         
-        anno_img = Image.open(str(self.image_path / anno_name).replace("JPEGImages", "Annotations")).convert("L")
-        anno_arr = np.array(anno_img)
+        support_anno = Image.open(str(self.annotation_path / support_anno_name)).convert("L")
+        anno_arr = np.array(support_anno)
         anno_img_tf = tvtf.Compose([
         ])
-        anno_img = torch.Tensor(anno_img_tf(anno_arr))
+        support_anno = torch.Tensor(anno_img_tf(anno_arr))
         
-        return [support_img, anno_img], query_img
+        query_anno = Image.open(str(self.annotation_path / query_anno_name)).convert("L")
+        anno_arr = np.array(query_anno)
+        anno_img_tf = tvtf.Compose([
+        ])
+        query_anno = torch.Tensor(anno_img_tf(anno_arr))
+        
+        
+        return [support_img, support_anno], [query_img, query_anno]
 
         
     def get_pair_list(self):
@@ -92,23 +112,25 @@ def test():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root")
     parser.add_argument("--imgset")
-    parser.add_argument("--img_folder")
+    parser.add_argument("--anno_folder")
     args = parser.parse_args()
 
-    dataset = DAVISLoader(root_path=args.root, imageset_folder=args.imgset, image_folder=args.img_folder)
-    #dataset.__getitem__(0)
-    support_fr, query_img = dataset.__getitem__(0)
+    dataset = DAVISLoader(root_path=args.root, imageset_folder=args.imgset, annotation_folder=args.anno_folder)
+    
+    support_fr, query_fr = dataset.__getitem__(0)
 
     
-    plt.subplot(1, 3, 1)
+    plt.subplot(1, 4, 1)
     plt.imshow(support_fr[0].squeeze(0))
-    plt.subplot(1, 3, 2)
+    plt.subplot(1, 4, 2)
     plt.imshow(support_fr[1])
-    plt.subplot(1, 3, 3)
-    plt.imshow(query_img.squeeze(0))
+    plt.subplot(1, 4, 3)
+    plt.imshow(query_fr[0].squeeze(0))
+    plt.subplot(1, 4, 4)
+    plt.imshow(query_fr[1])
+    
     plt.show()
     plt.close()
-    
 
 if __name__ == "__main__":
     test()
