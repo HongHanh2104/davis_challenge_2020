@@ -76,7 +76,7 @@ class DAVISLoader(data.Dataset):
         anno_img_tf = tvtf.Compose([
         ])
         anno_img = torch.Tensor(anno_img_tf(anno_arr))
-        print(support_img.shape, anno_img.shape, query_img.shape)
+        
         return [support_img, anno_img], query_img
 
         
