@@ -17,17 +17,21 @@ import random
 class DAVISDataset(data.Dataset):
 
     def __init__(self, root_path=None,
-                 phase="train",
-                 resolution="480p",
-                 year="2017",
-                 imageset_folder="ImageSets",
                  annotation_folder="Annotations",
+                 jpeg_folder="JPEGImages",
+                 resolution="480p",
+                 imageset_folder="ImageSets",
+                 year="2017",
+                 phase="train",
                  mode=0):
         super().__init__()
 
         # Root directory
         assert root_path is not None, "Missing root path, should be a path DAVIS dataset!"
         self.root_path = Path(root_path)
+
+        self.annotation = annotation_folder
+        self.jpeg = jpeg_folder
 
         # Path to Annotations
         self.annotation_path = self.root_path / annotation_folder / resolution
@@ -73,7 +77,7 @@ class DAVISDataset(data.Dataset):
         print(support_anno_name, query_anno_name)
 
         support_img = Image.open(str(
-            self.annotation_path / support_img_name).replace("Annotations", "JPEGImages")).convert('RGB')
+            self.annotation_path / support_img_name).replace(self.annotation, self.jpeg)).convert('RGB')
         support_arr = np.array(support_img)
         support_img_tf = tvtf.Compose([
             tvtf.ToTensor(),
@@ -81,7 +85,7 @@ class DAVISDataset(data.Dataset):
         support_img = support_img_tf(support_arr)
 
         query_img = Image.open(str(
-            self.annotation_path / query_img_name).replace("Annotations", "JPEGImages")).convert('RGB')
+            self.annotation_path / query_img_name).replace(self.annotation, self.jpeg)).convert('RGB')
         query_arr = np.array(query_img)
         query_img_tf = tvtf.Compose([
             tvtf.ToTensor(),

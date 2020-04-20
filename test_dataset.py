@@ -8,20 +8,29 @@ import argparse
 
 def test_davis():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root")
-    parser.add_argument("--imgset", default="ImageSets")
-    parser.add_argument("--anno", default="Annotations")
-    parser.add_argument("--year", default="2017")
-    parser.add_argument("--res", default="480p")
-    parser.add_argument("--phase", default="train")
-    parser.add_argument("--mode", default=0, type=int)
+    parser.add_argument("--root", help='path to DAVIS-like folder')
+    parser.add_argument("--anno", default="Annotations",
+                        help='path to Annotations subfolder (of ROOT)')
+    parser.add_argument("--jpeg", default="JPEGImages",
+                        help='path to JPEGImages subfolder (of ROOT)')
+    parser.add_argument("--res", default="480p",
+                        help='path to Resolution subfolder (of ANNO and JPEG)')
+    parser.add_argument("--imgset", default="ImageSets",
+                        help='path to ImageSet subfolder (of ROOT)')
+    parser.add_argument("--year", default="2017",
+                        help='path to Year subfolder (of IMGSET)')
+    parser.add_argument("--phase", default="train",
+                        help='path to phase txt file (of IMGSET/YEAR)')
+    parser.add_argument("--mode", default=0, type=int,
+                        help='frame pair selector mode')
     args = parser.parse_args()
 
     dataset = DAVISDataset(root_path=args.root,
-                           imageset_folder=args.imgset,
                            annotation_folder=args.anno,
-                           year=args.year,
+                           jpeg_folder=args.jpeg,
                            resolution=args.res,
+                           imageset_folder=args.imgset,
+                           year=args.year,
                            phase=args.phase,
                            mode=args.mode)
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
