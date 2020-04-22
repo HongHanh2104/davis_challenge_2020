@@ -56,16 +56,18 @@ For each input index, the **DAVISDataset** will return a pair of frame in packed
 To test dataset, use `test_dataset.py`:
 
 ```
-usage: test_dataset.py [-h] [--root ROOT] [--imgset IMGSET] [--anno ANNO]
-                       [--year YEAR] [--res RES] [--phase PHASE] [--mode MODE]
+usage: test_dataset.py [-h] [--root ROOT] [--anno ANNO] [--jpeg JPEG]
+                       [--res RES] [--imgset IMGSET] [--year YEAR]
+                       [--phase PHASE] [--mode MODE]
 
 optional arguments:
   -h, --help       show this help message and exit
   --root ROOT      path to DAVIS-like folder
-  --imgset IMGSET  path to ImageSet subfolder (of ROOT)
   --anno ANNO      path to Annotations subfolder (of ROOT)
-  --year YEAR      path to Year subfolder (of IMGSET)
+  --jpeg JPEG      path to JPEGImages subfolder (of ROOT)
   --res RES        path to Resolution subfolder (of ANNO and JPEG)
+  --imgset IMGSET  path to ImageSet subfolder (of ROOT)
+  --year YEAR      path to Year subfolder (of IMGSET)
   --phase PHASE    path to phase txt file (of IMGSET/YEAR)
-  --mode MOD       mode (see Dataset class above)
+  --mode MODE      frame pair selector mode
 ```
