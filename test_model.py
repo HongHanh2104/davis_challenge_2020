@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 from PIL import Image
 import numpy as np
 from torchvision import transforms as tvtf
@@ -20,9 +21,9 @@ def get_dummy(ds_size, in_channels=3, nclasses=2, h=854, w=480):
     return [
         [
             (
-                torch.rand(in_channels, h, w).cpu(),
+                torch.rand(in_channels, h, w),
                 torch.randint(low=0, high=nclasses, size=(h, w)),
-                torch.rand(in_channels, h, w).cpu()
+                torch.rand(in_channels, h, w)
             ),
             torch.randint(low=0, high=nclasses, size=(h, w))
         ]
@@ -37,13 +38,13 @@ def get_dataset(root, mode):
 if __name__ == "__main__":
     dev = torch.device('cuda')
 
-    dataset = get_dummy(ds_size=100, h=100, w=100)
+    dataset = get_dummy(ds_size=1000, h=200, w=200)
     dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
 
     extractor = ResNetExtractor('resnet50').to(dev)
     # print(extractor)
-    # net = CANet(num_class=2, extractor=extractor).to(dev)
-    net = Res_Deeplab(num_classes=2).to(dev)
+    net = CANet(num_class=2, extractor=extractor).to(dev)
+    # net = Res_Deeplab(num_classes=2).to(dev)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters())
@@ -54,6 +55,8 @@ if __name__ == "__main__":
         lbls = move_to(lbls, dev)
 
         outs = net(inps)
+        lbls = F.interpolate(lbls.unsqueeze(
+            1).float(), outs.shape[-2:], mode='nearest').squeeze(1).long()
 
         loss = criterion(outs, lbls)
         loss.backward()

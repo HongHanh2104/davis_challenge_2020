@@ -74,8 +74,6 @@ class DAVISDataset(data.Dataset):
         query_anno_name = self.frame_list[inx][1]
         query_img_name = query_anno_name.replace("png", "jpg")
 
-        print(support_anno_name, query_anno_name)
-
         support_img = Image.open(str(
             self.annotation_path / support_img_name).replace(self.annotation, self.jpeg)).convert('RGB')
         support_arr = np.array(support_img)
@@ -104,7 +102,7 @@ class DAVISDataset(data.Dataset):
         anno_arr = np.array(query_anno)
         anno_img_tf = tvtf.Compose([
         ])
-        query_anno = torch.Tensor(anno_img_tf(anno_arr)).long()
+        query_anno = torch.Tensor(anno_img_tf(anno_arr)).long() / 255
 
         return (support_img, support_anno, query_img), query_anno
 
