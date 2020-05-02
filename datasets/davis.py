@@ -98,14 +98,14 @@ class DAVISDataset(data.Dataset):
         anno_arr = np.array(support_anno)
         anno_img_tf = tvtf.Compose([
         ])
-        support_anno = torch.Tensor(anno_img_tf(anno_arr))
+        support_anno = torch.Tensor(anno_img_tf(anno_arr)).long()
 
         query_anno = Image.open(
             str(self.annotation_path / query_anno_name)).convert("L")
         anno_arr = np.array(query_anno)
         anno_img_tf = tvtf.Compose([
         ])
-        query_anno = torch.Tensor(anno_img_tf(anno_arr))
+        query_anno = torch.Tensor(anno_img_tf(anno_arr)).long()
 
         return (support_img, support_anno, query_img), query_anno
 
