@@ -1,10 +1,13 @@
-id: ResUNet_Single
+id: UNet_Single
 pretrained: null
+seed: 3698
 model:
-    name: ResidUNet
+    name: UNet
     args:
         nclasses: 2
         in_channels: 3
+        first_channels: 64
+        depth: 4
 optimizer:
     name: Adam
     args:
