@@ -1,12 +1,10 @@
-id: UNet_Single
+id: ResUNet_Single
 pretrained: null
 model:
-    name: UNet
+    name: ResidUNet
     args:
         nclasses: 2
         in_channels: 3
-        first_channels: 64
-        depth: 1
 optimizer:
     name: Adam
     args:
@@ -37,7 +35,7 @@ scheduler:
         verbose: True
 dataset:
     train:
-        name: DAVISDataset
+        name: DAVISPairDataset
         args:
             root_path: data/DAVIS-trainval
             resolution: 480p_split
@@ -49,7 +47,7 @@ dataset:
                 batch_size: 1
                 shuffle: True
     val:
-        name: DAVISDataset
+        name: DAVISPairDataset
         args:
             root_path: data/DAVIS-trainval
             resolution: 480p_split

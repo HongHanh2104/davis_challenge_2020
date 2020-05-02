@@ -189,7 +189,7 @@ class UNet(nn.Module):
         self.ref_img_encoder = UNetEncoder(3, depth, first_channels)
 
         self.encoder = UNetEncoder(in_channels, depth, first_channels)
-        self.middle_conv = MiddleBlock(first_channels * 2**(depth - 1) + first_channels,
+        self.middle_conv = MiddleBlock(first_channels * 2**depth,
                                        first_channels * 2**depth)
         self.decoder = UNetDecoder(depth, first_channels * 2**depth)
         self.final_conv = nn.Conv2d(first_channels, nclasses, kernel_size=1)
@@ -199,7 +199,7 @@ class UNet(nn.Module):
 
         ref_img = self.ref_img_encoder(ref_img)
         del self.ref_img_encoder.features
-        ref_mask = F.interpolate(ref_mask.unsqueeze(0).float(),
+        ref_mask = F.interpolate(ref_mask.unsqueeze(1).float(),
                                  ref_img.shape[-2:],
                                  mode='nearest')
         ref = ref_img * ref_mask
