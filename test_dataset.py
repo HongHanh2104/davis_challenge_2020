@@ -33,6 +33,7 @@ def test_davis():
                            year=args.year,
                            phase=args.phase,
                            mode=args.mode)
+    '''
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
 
     for idx, batch in enumerate(dataloader):
@@ -46,7 +47,7 @@ def test_davis():
             fig.tight_layout()
             plt.show()
             plt.close()
-
+    '''
 
 if __name__ == "__main__":
     test_davis()

@@ -47,6 +47,7 @@ class DAVISDataset(data.Dataset):
             video_id = folder.name.split('_')[0]
             if video_id in video_name_prefixes:
                 self.video_names.append(folder.name)
+        print(self.video_names)
 
         # Generate frames
         self.frame_list = []
