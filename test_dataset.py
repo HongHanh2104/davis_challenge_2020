@@ -33,7 +33,20 @@ def test_davis():
                            year=args.year,
                            phase=args.phase,
                            mode=args.mode)
-    '''
+    a, b = dataset.__getitem__(inx=2500)
+    
+    fig, ax = plt.subplots(3, 2)
+    ax[0, 0].imshow(a[0].permute(1, 2, 0))
+    ax[0, 1].imshow(a[1].squeeze())
+    ax[1, 0].imshow(a[2].permute(1, 2, 0))
+    ax[1, 1].imshow(b[0].squeeze())
+    ax[2, 0].imshow(a[3].permute(1, 2, 0))
+    ax[2, 1].imshow(b[1].squeeze())
+    fig.tight_layout()
+    plt.show()
+    plt.close()
+
+    '''    
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
 
     for idx, batch in enumerate(dataloader):
