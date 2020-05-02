@@ -1,0 +1,65 @@
+id: UNet_Single
+pretrained: null
+model:
+    name: UNet
+    args:
+        nclasses: 2
+        in_channels: 3
+        first_channels: 64
+        depth: 1
+optimizer:
+    name: Adam
+    args:
+        lr: 0.01
+loss:
+    name: MixedLoss
+    args:
+        losses:
+            - name: CrossEntropyLoss
+            - name: DiceLoss
+        weights: [1, 1]
+metric:
+    - name: MeanIoU
+      args:
+          nclasses: 2
+    - name: PixelAccuracy
+      args:
+          nclasses: 2
+    - name: DiceScore
+      args:
+          nclasses: 2
+scheduler:
+    name: ReduceLROnPlateau
+    args:
+        mode: min
+        factor: 0.5
+        patience: 5
+        verbose: True
+dataset:
+    train:
+        name: DAVISDataset
+        args:
+            root_path: data/DAVIS-trainval
+            resolution: 480p_split
+            phase: train
+            mode: 1
+        loader:
+            name: DataLoader
+            args:
+                batch_size: 1
+                shuffle: True
+    val:
+        name: DAVISDataset
+        args:
+            root_path: data/DAVIS-trainval
+            resolution: 480p_split
+            phase: val
+            mode: 1
+        loader:
+            name: DataLoader
+            args:
+                batch_size: 1
+trainer:
+    nepochs: 50
+    val_step: 1
+    log_step: 1
