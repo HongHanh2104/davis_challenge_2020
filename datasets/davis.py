@@ -79,7 +79,6 @@ class DAVISDataset(data.Dataset):
         query_anno_name = self.frame_list[inx][2]
         query_img_name = query_anno_name.replace("png", "jpg")
 
-<<<<<<< HEAD
         print(support_anno_name, query_anno_name)
         
         def convert_img_tensor(img_name):
@@ -110,39 +109,6 @@ class DAVISDataset(data.Dataset):
         
 
         return (support_img, support_anno, pres_img, query_img), (pres_anno, query_anno)
-=======
-        support_img = Image.open(str(
-            self.annotation_path / support_img_name).replace(self.annotation, self.jpeg)).convert('RGB')
-        support_arr = np.array(support_img)
-        support_img_tf = tvtf.Compose([
-            tvtf.ToTensor(),
-        ])
-        support_img = support_img_tf(support_arr)
-
-        query_img = Image.open(str(
-            self.annotation_path / query_img_name).replace(self.annotation, self.jpeg)).convert('RGB')
-        query_arr = np.array(query_img)
-        query_img_tf = tvtf.Compose([
-            tvtf.ToTensor(),
-        ])
-        query_img = query_img_tf(query_arr)
-
-        support_anno = Image.open(
-            str(self.annotation_path / support_anno_name)).convert("L")
-        anno_arr = np.array(support_anno)
-        anno_img_tf = tvtf.Compose([
-        ])
-        support_anno = torch.Tensor(anno_img_tf(anno_arr)).long()
-
-        query_anno = Image.open(
-            str(self.annotation_path / query_anno_name)).convert("L")
-        anno_arr = np.array(query_anno)
-        anno_img_tf = tvtf.Compose([
-        ])
-        query_anno = torch.Tensor(anno_img_tf(anno_arr)).long() / 255
-
-        return (support_img, support_anno, query_img), query_anno
->>>>>>> origin/master
 
     def __len__(self):
         return len(self.frame_list)
