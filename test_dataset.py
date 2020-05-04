@@ -1,12 +1,12 @@
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
-from datasets.davis import DAVISDataset
+from datasets.davis import DAVISPairDataset
 
 import argparse
 
 
-def test_davis():
+def test_davis_pair():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", help='path to DAVIS-like folder')
     parser.add_argument("--anno", default="Annotations",
@@ -25,28 +25,15 @@ def test_davis():
                         help='frame pair selector mode')
     args = parser.parse_args()
 
-    dataset = DAVISDataset(root_path=args.root,
-                           annotation_folder=args.anno,
-                           jpeg_folder=args.jpeg,
-                           resolution=args.res,
-                           imageset_folder=args.imgset,
-                           year=args.year,
-                           phase=args.phase,
-                           mode=args.mode)
-    a, b = dataset.__getitem__(inx=2500)
-    
-    fig, ax = plt.subplots(3, 2)
-    ax[0, 0].imshow(a[0].permute(1, 2, 0))
-    ax[0, 1].imshow(a[1].squeeze())
-    ax[1, 0].imshow(a[2].permute(1, 2, 0))
-    ax[1, 1].imshow(b[0].squeeze())
-    ax[2, 0].imshow(a[3].permute(1, 2, 0))
-    ax[2, 1].imshow(b[1].squeeze())
-    fig.tight_layout()
-    plt.show()
-    plt.close()
-
-    '''    
+    dataset = DAVISPairDataset(root_path=args.root,
+                               annotation_folder=args.anno,
+                               jpeg_folder=args.jpeg,
+                               resolution=args.res,
+                               imageset_folder=args.imgset,
+                               year=args.year,
+                               phase=args.phase,
+                               mode=args.mode)
+       
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
 
     for idx, batch in enumerate(dataloader):
@@ -60,7 +47,6 @@ def test_davis():
             fig.tight_layout()
             plt.show()
             plt.close()
-    '''
 
 if __name__ == "__main__":
-    test_davis()
+    test_davis_pair()
