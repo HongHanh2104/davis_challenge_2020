@@ -22,7 +22,9 @@ class DAVISPairDataset(data.Dataset):
                  imageset_folder="ImageSets",
                  year="2017",
                  phase="train",
-                 mode=0):
+                 mode=0,
+                 min_skip=0,
+                 max_skip=-1):
         super().__init__()
 
         # Root directory
@@ -47,6 +49,9 @@ class DAVISPairDataset(data.Dataset):
             if video_id in video_name_prefixes:
                 self.video_names.append(folder.name)
 
+        self.min_skip = min_skip
+        self.max_skip = max_skip
+
         # Generate frames
         self.frame_list = []
         for video_name in self.video_names:
@@ -56,22 +61,28 @@ class DAVISPairDataset(data.Dataset):
                 query_anno = video_name + "/" + pair[1]
                 self.frame_list.append((support_anno, query_anno))
 
+
     def get_frame(self, mode, video_name):
         images = sorted(os.listdir(str(self.annotation_path / video_name)))
+        n = len(images)
+        min_skip = self.min_skip
+        max_skip = min(n, self.max_skip if self.max_skip != -1 else n)
 
-        mode_map = [
-            list(permutations(images, 2)),
-            [(images[0], images[i]) for i in range(1, len(images))],
-            [(i, j) for i in images for j in images if i < j]
-        ]
-
-        return mode_map[mode]
+        if mode == 0:
+            return list(permutations(images, 2))
+        elif mode == 1:
+            return [(images[0], images[i]) for i in range(1, n) if max_skip >= i >= min_skip],
+        elif mode == 2:    
+            indices = [(i, j) for i in range(n-1) for j in range(i+1, n) if max_skip >= j - i >= min_skip]
+            return [(images[i], images[j]) for i, j in indices]
+        else:
+            raise Exception('Unknown mode')
 
     def __getitem__(self, inx):
         support_anno_name = self.frame_list[inx][0]
-        support_img_name = support_anno_name.replace("png", "jpg")
+        support_img_name = support_anno_name.replace(".png", ".jpg")
         query_anno_name = self.frame_list[inx][1]
-        query_img_name = query_anno_name.replace("png", "jpg")
+        query_img_name = query_anno_name.replace(".png", ".jpg")
 
         support_img = Image.open(str(
             self.annotation_path / support_img_name).replace(self.annotation, self.jpeg)).convert('RGB')
