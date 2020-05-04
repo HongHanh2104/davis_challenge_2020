@@ -24,7 +24,8 @@ class DAVISPairDataset(data.Dataset):
                  phase="train",
                  mode=0,
                  min_skip=0,
-                 max_skip=-1):
+                 max_skip=-1,
+                 max_npairs=-1):
         super().__init__()
 
         # Root directory
@@ -51,6 +52,7 @@ class DAVISPairDataset(data.Dataset):
 
         self.min_skip = min_skip
         self.max_skip = max_skip
+        self.max_npairs = max_npairs
 
         # Generate frames
         self.frame_list = []
@@ -71,9 +73,11 @@ class DAVISPairDataset(data.Dataset):
         if mode == 0:
             return list(permutations(images, 2))
         elif mode == 1:
-            return [(images[0], images[i]) for i in range(1, n) if max_skip >= i >= min_skip],
+            return [(images[0], images[i]) for i in range(1, n) if max_skip >= i >= min_skip]
         elif mode == 2:    
             indices = [(i, j) for i in range(n-1) for j in range(i+1, n) if max_skip >= j - i >= min_skip]
+            max_npairs = min(len(indices), self.max_npairs if self.max_npairs != -1 else len(indices))
+            indices = random.choices(indices, k=max_npairs)
             return [(images[i], images[j]) for i, j in indices]
         else:
             raise Exception('Unknown mode')
