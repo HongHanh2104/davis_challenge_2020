@@ -101,7 +101,7 @@ class ResidUNet(nn.Module):
                 down_blocks.append(bottleneck)
         self.down_blocks = nn.ModuleList(down_blocks)
 
-        self.bridge = Bridge(2048+2048, 2048)
+        self.bridge = Bridge(2048+512, 2048)
 
         up_blocks = []
         up_blocks.append(UpBlockForUNetWithResNet50(2048, 1024))
@@ -134,14 +134,24 @@ class ResidUNet(nn.Module):
     def forward(self, inp, with_output_feature_map=False):
         ref_img, ref_mask, q_img = inp
 
-        _, ref_img = self.extract(ref_img)
+        # Extract query
+        features, q_img = self.extract(q_img)
+        
+        # Extract features
+        ref_fts, _ = self.extract(ref_img)
+        ref_img = ref_fts['layer_3']
         ref_mask = F.interpolate(ref_mask.unsqueeze(1).float(),
                                  ref_img.shape[-2:],
-                                 mode='nearest')
+                                 mode='bilinear', align_corners=True)
+        
         ref = ref_img * ref_mask
+        h, w = ref_mask.shape[-2:]
+        area = ref_mask.sum(dim=1, keepdim=True) + 1e-6
+        ref = F.avg_pool2d(ref, ref_mask.shape[-2:]) * h * w / area
 
-        features, q_img = self.extract(q_img)
-
+        # Combine
+        ref = F.interpolate(ref, q_img.shape[-2:], 
+                            mode='bilinear', align_corners=True)
         x = torch.cat([ref, q_img], dim=1)
         x = self.bridge(x)
 

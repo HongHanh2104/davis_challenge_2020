@@ -135,10 +135,24 @@ class MiddleBlock(nn.Module):
             Conv2dBlock(outputs, outputs, kernel_size=3, cfg=self.cfg),
         )
 
-    def forward(self, x):
-        #print('Input:', x.shape)
+        self.attn = nn.Transformer(inputs, 2, 1, 1)
+
+        self.attn_score = None
+        def get_attn_score(m, i, o):
+            self.attn_score = o[1]
+        self.attn.decoder.layers[0].multihead_attn.register_forward_hook(get_attn_score)
+
+    def forward(self, q_img, ref_img, ref_mask):
+        B, C, H, W = q_img.shape
+        ref_mask = F.interpolate(ref_mask.unsqueeze(0).float(),
+                                 (H, W), mode='nearest')
+        ref_img = ref_img * ref_mask 
+        q_img = q_img.reshape(B, C, -1).permute(2, 0, 1)
+        ref_img = ref_img.reshape(B, C, -1).permute(2, 0, 1)
+        #ref_mask = ref_mask.reshape(B, 1, -1).repeat((1, H*W, 1)).squeeze(0)
+        x = self.attn(ref_img, q_img)#, attn_mask=ref_mask)
+        x = x.permute(1, 2, 0).reshape(B, C, H, W)
         x = self.conv(x)
-        #print('Middle:', x.shape)
         return x
 
 
@@ -186,29 +200,30 @@ class UNetDecoder(nn.Module):
 class UNet(nn.Module):
     def __init__(self, nclasses, in_channels, first_channels, depth):
         super(UNet, self).__init__()
-        self.ref_img_encoder = UNetEncoder(3, depth, first_channels)
-
         self.encoder = UNetEncoder(in_channels, depth, first_channels)
-        self.middle_conv = MiddleBlock(first_channels * 2**depth,
+        self.middle_conv = MiddleBlock(first_channels * 2**(depth-1),
                                        first_channels * 2**depth)
         self.decoder = UNetDecoder(depth, first_channels * 2**depth)
         self.final_conv = nn.Conv2d(first_channels, nclasses, kernel_size=1)
 
+    def combine(self, feature, mask, query):
+        mask = F.interpolate(mask.unsqueeze(1).float(),
+                             feature.shape[-2:],
+                             mode='nearest')
+        return feature * mask + query
+
     def forward(self, inp):
         ref_img, ref_mask, q_img = inp
 
-        ref_img = self.ref_img_encoder(ref_img)
-        del self.ref_img_encoder.features
-        ref_mask = F.interpolate(ref_mask.unsqueeze(1).float(),
-                                 ref_img.shape[-2:],
-                                 mode='nearest')
-        ref = ref_img * ref_mask
+        ref_img = self.encoder(ref_img)
+        ref_features = self.encoder.get_features()
 
         q_img = self.encoder(q_img)
-        features = self.encoder.get_features()
+        q_features = self.encoder.get_features()
 
-        mid = torch.cat([ref, q_img], dim=1)
-        mid = self.middle_conv(mid)
+        mid = self.middle_conv(q_img, ref_img, ref_mask)
+        features = [self.combine(ref_feature, ref_mask, q_feature)
+                    for ref_feature, q_feature in zip(ref_features, q_features)]
 
         x = self.decoder(mid, features)
         x = self.final_conv(x)
