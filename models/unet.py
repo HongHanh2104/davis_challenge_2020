@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+
 class Conv2dBlock(nn.Module):
     norm_map = {
         'none': nn.Identity,
@@ -149,7 +150,7 @@ class MiddleBlock(nn.Module):
         q_img = q_img.reshape(B, C, -1).permute(2, 0, 1)
         ref_img = ref_img.reshape(B, C, -1).permute(2, 0, 1)
         #ref_mask = ref_mask.reshape(B, 1, -1).repeat((1, H*W, 1)).squeeze(0)
-        x = self.attn(ref_img, q_img)#, attn_mask=ref_mask)
+        x = self.attn(ref_img, q_img)  # , attn_mask=ref_mask)
         x = x.permute(1, 2, 0).reshape(B, C, H, W)
         x = self.conv(x)
         return x
