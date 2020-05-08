@@ -1,4 +1,4 @@
-id: UNet_Single
+id: UNet_Single_Curriculum
 pretrained: null
 seed: 3698
 model:
@@ -16,16 +16,16 @@ optimizer:
 loss:
     name: CrossEntropyLoss
     args:
-metric:
-    - name: MeanIoU
-      args:
-          nclasses: 2
+metric: {}
+    #- name: MeanIoU
+    #  args:
+    #      nclasses: 2
     #- name: PixelAccuracy
     #  args:
     #      nclasses: 2
-    - name: DiceScore
-      args:
-          nclasses: 2
+    #- name: DiceScore
+    #  args:
+    #      nclasses: 2
 scheduler:
     name: ReduceLROnPlateau
     args:
@@ -39,13 +39,14 @@ dataset:
         args:
             root_path: data/DAVIS-trainval
             resolution: 480p_split
-            phase: train
+            phase: val
             mode: 1
+            #max_npairs: 1
         loader:
             name: DataLoader
             args:
                 batch_size: 1
-                shuffle: True
+                #shuffle: True
     val:
         name: DAVISPairDataset
         args:
@@ -53,6 +54,7 @@ dataset:
             resolution: 480p_split
             phase: val
             mode: 1
+            #max_npairs: 1
         loader:
             name: DataLoader
             args:

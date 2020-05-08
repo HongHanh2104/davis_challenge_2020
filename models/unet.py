@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-
+from memory_profiler import profile
 
 class Conv2dBlock(nn.Module):
     norm_map = {
@@ -137,10 +137,11 @@ class MiddleBlock(nn.Module):
 
         self.attn = nn.Transformer(inputs, 2, 1, 1)
 
-        self.attn_score = None
-        def get_attn_score(m, i, o):
-            self.attn_score = o[1]
-        self.attn.decoder.layers[0].multihead_attn.register_forward_hook(get_attn_score)
+        #if not self.training:
+        #    self.attn_score = None
+        #    def get_attn_score(m, i, o):
+        #        self.attn_score = o[1]
+        #    self.attn.decoder.layers[0].multihead_attn.register_forward_hook(get_attn_score)
 
     def forward(self, q_img, ref_img, ref_mask):
         B, C, H, W = q_img.shape
@@ -167,17 +168,13 @@ class UNetEncoder(nn.Module):
 
         self.depth = depth
         self.levels = nn.ModuleList(levels)
-        self.features = []
 
     def forward(self, x):
-        self.features = []
+        features = []
         for i in range(self.depth):
             ft, x = self.levels[i](x)
-            self.features.append(ft)
-        return x
-
-    def get_features(self):
-        return self.features[::-1]
+            features.append(ft)
+        return x, features[::-1]
 
 
 class UNetDecoder(nn.Module):
@@ -215,11 +212,8 @@ class UNet(nn.Module):
     def forward(self, inp):
         ref_img, ref_mask, q_img = inp
 
-        ref_img = self.encoder(ref_img)
-        ref_features = self.encoder.get_features()
-
-        q_img = self.encoder(q_img)
-        q_features = self.encoder.get_features()
+        ref_img, ref_features = self.encoder(ref_img)
+        q_img, q_features = self.encoder(q_img)
 
         mid = self.middle_conv(q_img, ref_img, ref_mask)
         features = [self.combine(ref_feature, ref_mask, q_feature)
