@@ -77,7 +77,7 @@ class DAVISPairDataset(data.Dataset):
         elif mode == 2:    
             indices = [(i, j) for i in range(n-1) for j in range(i+1, n) if max_skip >= j - i >= min_skip]
             max_npairs = min(len(indices), self.max_npairs if self.max_npairs != -1 else len(indices))
-            indices = random.choices(indices, k=max_npairs)
+            indices = random.sample(indices, k=max_npairs)
             return [(images[i], images[j]) for i, j in indices]
         else:
             raise Exception('Unknown mode')
