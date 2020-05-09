@@ -1,5 +1,5 @@
-id: STMOriginal-5-10
-pretrained: backup/STMOriginal-2020_05_08-19_27_48/best_metric_MeanIoU.pth
+id: STMOriginal-Max5
+pretrained: null #backup/STMOriginal-2020_05_08-19_27_48/best_metric_MeanIoU.pth
 seed: 3698
 model:
     name: STMOriginal
@@ -8,7 +8,7 @@ optimizer:
     name: SGD
     args:
         lr: 0.0005
-        momentum: 0.5
+        #momentum: 0.5
 loss:
     name: CrossEntropyLoss
     args:
@@ -31,27 +31,27 @@ scheduler:
         verbose: True
 dataset:
     train:
-        name: DAVISPairDataset
+        name: DAVISTripletDataset
         args:
             root_path: data/DAVIS-trainval
             resolution: 480p_split
-            phase: train
-            mode: 2
-            max_skip: 10
-            max_npairs: 20
+            phase: train_overfit
+            mode: 1
+            #max_skip: 5
+            #max_npairs: 1
         loader:
             name: DataLoader
             args:
                 batch_size: 1
                 shuffle: True
     val:
-        name: DAVISPairDataset
+        name: DAVISTripletDataset
         args:
             root_path: data/DAVIS-trainval
             resolution: 480p_split
-            phase: val
-            mode: 2
-            max_npairs: 50
+            phase: train_overfit
+            mode: 0
+            #max_npairs: 1
         loader:
             name: DataLoader
             args:

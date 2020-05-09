@@ -310,13 +310,33 @@ class STMOriginal(nn.Module):
         self.stm = STM()
 
     def forward(self, inp):
-        ref_frame, ref_mask, q_frame = inp
-
-        #num_objects, _ = torch.max(ref_mask.reshape(ref_mask.size(0), -1), dim=1)
+        a_im, a_seg, *b_ims, c_im = inp
+        # {a,b,c}_im: B3HW, a_seg: BHW
         num_objects = torch.LongTensor([[1]])
 
-        ref_mask = F.one_hot(ref_mask, 11).permute(0, 3, 1, 2)
+        # Memorize a
+        a_seg = F.one_hot(a_seg, 11).permute(0, 3, 1, 2)
+        k, v = self.stm.memorize(a_im, a_seg, num_objects)
 
-        k, v = self.stm.memorize(ref_frame, ref_mask, num_objects)
-        logit = self.stm.segment(q_frame, k, v, num_objects)
+        for b_im in b_ims:
+            # Segment b
+            b_logit = self.stm.segment(b_im, k, v, num_objects)
+            # Memorize b
+            b_pred = F.softmax(b_logit, dim=1)
+            b_k, b_v = self.stm.memorize(b_im, b_pred, num_objects)
+            k = torch.cat([k, b_k], dim=3)
+            v = torch.cat([v, b_v], dim=3)
+        logit = self.stm.segment(c_im, k, v, num_objects)
+
         return logit
+
+        #ref_frame, ref_mask, q_frame = inp
+
+        #num_objects, _ = torch.max(ref_mask.reshape(ref_mask.size(0), -1), dim=1)
+        #num_objects = torch.LongTensor([[1]])
+
+        #ref_mask = F.one_hot(ref_mask, 11).permute(0, 3, 1, 2)
+
+        #k, v = self.stm.memorize(ref_frame, ref_mask, num_objects)
+        #logit = self.stm.segment(q_frame, k, v, num_objects)
+        #return logit
