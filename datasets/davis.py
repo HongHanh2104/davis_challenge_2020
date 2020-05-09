@@ -90,33 +90,33 @@ class DAVISPairDataset(data.Dataset):
 
         support_img = Image.open(str(
             self.annotation_path / support_img_name).replace(self.annotation, self.jpeg)).convert('RGB')
-        support_arr = np.array(support_img)
         support_img_tf = tvtf.Compose([
+            #tvtf.CenterCrop((384, 384)),
             tvtf.ToTensor(),
         ])
-        support_img = support_img_tf(support_arr)
+        support_img = support_img_tf(support_img)
 
         query_img = Image.open(str(
             self.annotation_path / query_img_name).replace(self.annotation, self.jpeg)).convert('RGB')
-        query_arr = np.array(query_img)
         query_img_tf = tvtf.Compose([
+            #tvtf.CenterCrop((384, 384)),
             tvtf.ToTensor(),
         ])
-        query_img = query_img_tf(query_arr)
+        query_img = query_img_tf(query_img)
 
         support_anno = Image.open(
-            str(self.annotation_path / support_anno_name)).convert("L")
-        anno_arr = np.array(support_anno)
+            str(self.annotation_path / support_anno_name)).convert("P")
         anno_img_tf = tvtf.Compose([
+            #tvtf.CenterCrop((384, 384)),
         ])
-        support_anno = torch.Tensor(anno_img_tf(anno_arr)).long()
+        support_anno = torch.Tensor(np.array(anno_img_tf(support_anno))).long()
 
         query_anno = Image.open(
-            str(self.annotation_path / query_anno_name)).convert("L")
-        anno_arr = np.array(query_anno)
+            str(self.annotation_path / query_anno_name)).convert("P")
         anno_img_tf = tvtf.Compose([
+            #tvtf.CenterCrop((384, 384)),
         ])
-        query_anno = torch.Tensor(anno_img_tf(anno_arr)).long()
+        query_anno = torch.Tensor(np.array(anno_img_tf(query_anno))).long()
 
         return (support_img, support_anno, query_img), query_anno
 
@@ -201,7 +201,7 @@ class DAVISTripletDataset(data.Dataset):
 
         def convert_anno_tensor(anno_name):
             anno = Image.open(
-                str(self.annotation_path / anno_name)).convert("L")
+                str(self.annotation_path / anno_name)).convert("P")
             arr = np.array(anno)
             anno_tf = tvtf.Compose([
 
@@ -296,7 +296,7 @@ class DAVISPairRandomDataset(data.Dataset):
 
         def convert_anno_tensor(anno_name):
             anno = Image.open(
-                str(self.annotation_path / anno_name)).convert("L")
+                str(self.annotation_path / anno_name)).convert("P")
             arr = np.array(anno)
             anno_tf = tvtf.Compose([
 
