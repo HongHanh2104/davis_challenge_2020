@@ -174,6 +174,9 @@ class DAVISTripletDataset(DAVISCoreDataset):
                     for k in range(1 + min_skip, max_skip)
                     for i in range(n - k)]
         elif mode == 1:
+            return [(images[0], images[k - 1], images[k])
+                    for k in range(1 + min_skip, max_skip)]
+        elif mode == 2:
             indices = [(i, j, k)
                        for i in range(n-2*max_skip)
                        for j in range(i+min_skip, i+max_skip+1)
