@@ -202,7 +202,7 @@ class DAVISTripletDataset(DAVISCoreDataset):
                                    pres_anno_name,
                                    query_anno_name])
 
-        return (support_img, support_anno, pres_img, query_img), (pres_anno, query_anno)
+        return (support_img, support_anno, pres_img, query_img), query_anno #(pres_anno, query_anno)
 
     def __len__(self):
         return len(self.frame_list)
@@ -219,13 +219,15 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
                  mode=0,
                  min_skip=1,
                  max_skip=-1,
-                 max_npairs=-1):
+                 max_npairs=1):
         super().__init__(root_path, annotation_folder, jpeg_folder,
                          resolution, imageset_folder, year, phase)
 
         self.mode = mode
         self.min_skip = min_skip
         self.max_skip = max_skip
+        
+        self.video_names = self.video_names * max_npairs
 
     def get_frame(self, mode, video_name):
         images = sorted(os.listdir(str(self.annotation_path / video_name)))
@@ -236,11 +238,11 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
         if mode == 0:
             return random.sample(images, 2)
         elif mode == 1:
-            i = random.randint(min_skip, max_skip + 1)
+            i = random.randrange(min_skip, max_skip + 1)
             return images[0], images[i]
         elif mode == 2:
-            i = random.randint(0, n - max_skip)
-            j = i + random.randint(min_skip, max_skip + 1)
+            i = random.randrange(0, n - max_skip)
+            j = i + random.randrange(min_skip, max_skip + 1)
             return images[i], images[j]
         else:
             raise Exception('Unknown mode')

@@ -1,1 +1,2 @@
-from .davis import DAVISPairDataset, DAVISTripletDataset
+from .davis import DAVISPairDataset, DAVISTripletDataset, DAVISPairRandomDataset
+
