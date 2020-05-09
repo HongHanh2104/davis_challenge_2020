@@ -110,7 +110,12 @@ class DecoderBlock(nn.Module):
         return F.pad(source, (diffX // 2, diffX - diffX // 2,
                               diffY // 2, diffX - diffY // 2))
 
-    def forward(self, x, x_copy):
+    def forward(self, x, x_copy, ref_feature, ref_mask):
+        ref_mask = F.interpolate(ref_mask.unsqueeze(0).float(),
+                                 ref_feature.shape[-2:],
+                                 mode='bilinear', align_corners=True)
+        x_copy = ref_feature * ref_mask + x_copy
+
         x = self.upsample(x)
         x = self.sizematch(x, x_copy)
         x = torch.cat([x_copy, x], dim=1)
@@ -149,8 +154,8 @@ class MiddleBlock(nn.Module):
         #ref_img = ref_img * ref_mask 
         q_img = q_img.reshape(B, C, -1).permute(2, 0, 1)
         ref_img = ref_img.reshape(B, C, -1).permute(2, 0, 1)
-        #ref_mask = ref_mask.reshape(B, 1, -1).repeat((1, H*W, 1)).squeeze(0)
-        x = self.attn(ref_img, q_img)  # , attn_mask=ref_mask)
+        
+        x = self.attn(ref_img, q_img)
         x = x.permute(1, 2, 0).reshape(B, C, H, W)
         x = self.conv(x)
         return x
@@ -187,9 +192,10 @@ class UNetDecoder(nn.Module):
         self.depth = depth
         self.levels = nn.ModuleList(levels)
 
-    def forward(self, x, concats):
-        for level, x_copy in zip(self.levels, concats):
-            x = level(x, x_copy)
+    def forward(self, x, q_features, ref_features, ref_mask):
+        z = zip(self.levels, q_features, ref_features)
+        for level, q_feature, ref_feature in z:
+            x = level(x, q_feature, ref_feature, ref_mask)
         return x
 
 
@@ -202,12 +208,6 @@ class UNet(nn.Module):
         self.decoder = UNetDecoder(depth, first_channels * 2**depth)
         self.final_conv = nn.Conv2d(first_channels, nclasses, kernel_size=1)
 
-    def combine(self, feature, mask, query):
-        mask = F.interpolate(mask.unsqueeze(1).float(),
-                             feature.shape[-2:],
-                             mode='nearest')
-        return feature * mask + query
-
     def forward(self, inp):
         ref_img, ref_mask, q_img = inp
 
@@ -215,10 +215,8 @@ class UNet(nn.Module):
         q_img, q_features = self.encoder(q_img)
 
         mid = self.middle_conv(q_img, ref_img, ref_mask)
-        features = [self.combine(ref_feature, ref_mask, q_feature)
-                    for ref_feature, q_feature in zip(ref_features, q_features)]
 
-        x = self.decoder(mid, features)
+        x = self.decoder(mid, q_features, ref_features, ref_mask)
         x = self.final_conv(x)
         return x
 

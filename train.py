@@ -1,7 +1,6 @@
 import yaml
 import torch
 import torch.nn as nn
-from torch.utils.data import random_split
 from torch.utils import data
 from tqdm import tqdm
 from torchnet import meter
@@ -54,8 +53,8 @@ def train(config):
     set_seed(config['seed'])
     optimizer = get_instance(config['optimizer'],
                              params=model.parameters())
-    if pretrained is not None:
-        optimizer.load_state_dict(pretrained['optimizer_state_dict'])
+    #if pretrained is not None:
+    #    optimizer.load_state_dict(pretrained['optimizer_state_dict'])
 
     # 5: Define Scheduler
     set_seed(config['seed'])

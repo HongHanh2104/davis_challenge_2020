@@ -304,9 +304,19 @@ class STM(nn.Module):
             return self.memorize(*args, **kwargs)
 
 
-class STMWrapper(nn.Module):
+class STMOriginal(nn.Module):
     def __init__(self):
         super().__init__()
+        self.stm = STM()
 
     def forward(self, inp):
-        ref_f, ref_m, query_f = inp
+        ref_frame, ref_mask, q_frame = inp
+
+        #num_objects, _ = torch.max(ref_mask.reshape(ref_mask.size(0), -1), dim=1)
+        num_objects = torch.LongTensor([[1]])
+
+        ref_mask = F.one_hot(ref_mask, 11).permute(0, 3, 1, 2)
+
+        k, v = self.stm.memorize(ref_frame, ref_mask, num_objects)
+        logit = self.stm.segment(q_frame, k, v, num_objects)
+        return logit

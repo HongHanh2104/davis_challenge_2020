@@ -1,13 +1,9 @@
-id: UNetSingle
-pretrained: null
+id: STMOriginal-5-10
+pretrained: backup/STMOriginal-2020_05_08-19_27_48/best_metric_MeanIoU.pth
 seed: 3698
 model:
-    name: UNet
+    name: STMOriginal
     args:
-        nclasses: 2
-        in_channels: 3
-        first_channels: 64
-        depth: 4
 optimizer:
     name: SGD
     args:
@@ -39,9 +35,10 @@ dataset:
         args:
             root_path: data/DAVIS-trainval
             resolution: 480p_split
-            phase: train_overfit
+            phase: train
             mode: 2
-            #max_npairs: 10
+            max_skip: 10
+            max_npairs: 20
         loader:
             name: DataLoader
             args:
@@ -52,9 +49,9 @@ dataset:
         args:
             root_path: data/DAVIS-trainval
             resolution: 480p_split
-            phase: train_overfit
-            mode: 1
-            #max_npairs: 1
+            phase: val
+            mode: 2
+            max_npairs: 50
         loader:
             name: DataLoader
             args:
