@@ -302,3 +302,11 @@ class STM(nn.Module):
             return self.segment(*args, **kwargs)
         else:
             return self.memorize(*args, **kwargs)
+
+
+class STMWrapper(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, inp):
+        ref_f, ref_m, query_f = inp

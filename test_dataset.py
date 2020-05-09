@@ -25,7 +25,7 @@ def test_davis_pair():
                         help='frame pair selector mode')
     args = parser.parse_args()
 
-    dataset = DAVISPairRandomDataset(root_path=args.root,
+    dataset = DAVISPairDataset(root_path=args.root,
                                annotation_folder=args.anno,
                                jpeg_folder=args.jpeg,
                                resolution=args.res,
@@ -34,20 +34,23 @@ def test_davis_pair():
                                phase=args.phase,
                                mode=args.mode)
 
-    a, b = dataset.__getitem__(0)
-    fig, ax = plt.subplots(2, 2)
-    ax[0, 0].imshow(a[0].permute(1, 2, 0))
-    ax[0, 1].imshow(a[1].squeeze())
-    ax[1 ,0].imshow(a[2].permute(1, 2, 0))
-    ax[1, 1].imshow(b.squeeze())
-    fig.tight_layout()
-    plt.show()
-    plt.close()
+    # a, b = dataset.__getitem__(0)
+    # fig, ax = plt.subplots(2, 2)
+    # ax[0, 0].imshow(a[0].permute(1, 2, 0))
+    # ax[0, 1].imshow(a[1].squeeze())
+    # ax[1 ,0].imshow(a[2].permute(1, 2, 0))
+    # ax[1, 1].imshow(b.squeeze())
+    # fig.tight_layout()
+    # plt.show()
+    # plt.close()
 
-    '''
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
     for idx, batch in enumerate(dataloader):
         for support_img, support_anno, query_img, query_anno in zip(*batch[0], batch[1]):
+            import numpy as np
+            print(np.unique(support_anno), np.unique(query_anno))
+            print(support_anno.shape)
+
             fig, ax = plt.subplots(2, 2)
             ax[0, 0].imshow(support_img.permute(1, 2, 0))
             ax[0, 1].imshow(support_anno.squeeze())
@@ -57,7 +60,7 @@ def test_davis_pair():
             fig.tight_layout()
             plt.show()
             plt.close()
-    '''
+
 
 if __name__ == "__main__":
     test_davis_pair()

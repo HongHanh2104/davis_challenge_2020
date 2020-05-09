@@ -63,7 +63,6 @@ class DAVISPairDataset(data.Dataset):
                 query_anno = video_name + "/" + pair[1]
                 self.frame_list.append((support_anno, query_anno))
 
-
     def get_frame(self, mode, video_name):
         images = sorted(os.listdir(str(self.annotation_path / video_name)))
         n = len(images)
@@ -74,9 +73,11 @@ class DAVISPairDataset(data.Dataset):
             return list(permutations(images, 2))
         elif mode == 1:
             return [(images[0], images[i]) for i in range(1, n) if max_skip >= i >= min_skip]
-        elif mode == 2:    
-            indices = [(i, j) for i in range(n-1) for j in range(i+1, n) if max_skip >= j - i >= min_skip]
-            max_npairs = min(len(indices), self.max_npairs if self.max_npairs != -1 else len(indices))
+        elif mode == 2:
+            indices = [(i, j) for i in range(n-1)
+                       for j in range(i+1, n) if max_skip >= j - i >= min_skip]
+            max_npairs = min(
+                len(indices), self.max_npairs if self.max_npairs != -1 else len(indices))
             indices = random.sample(indices, k=max_npairs)
             return [(images[i], images[j]) for i, j in indices]
         else:
@@ -105,14 +106,14 @@ class DAVISPairDataset(data.Dataset):
         query_img = query_img_tf(query_arr)
 
         support_anno = Image.open(
-            str(self.annotation_path / support_anno_name)).convert("L")
+            str(self.annotation_path / support_anno_name)).convert("P")
         anno_arr = np.array(support_anno)
         anno_img_tf = tvtf.Compose([
         ])
         support_anno = torch.Tensor(anno_img_tf(anno_arr)).long()
 
         query_anno = Image.open(
-            str(self.annotation_path / query_anno_name)).convert("L")
+            str(self.annotation_path / query_anno_name)).convert("P")
         anno_arr = np.array(query_anno)
         anno_img_tf = tvtf.Compose([
         ])
@@ -178,48 +179,46 @@ class DAVISTripletDataset(data.Dataset):
         elif mode == 1:
             return [(images[i], images[j], images[i + k]) for k in range(2, min(n, self.max_skip)) for i in range(n - k)
                     for j in range(i + 1, i + k)]
+        else:
+            raise Exception('Unknown mode')
+
+    def im2tensor(self, img_name):
+        img = Image.open(str(
+            self.annotation_path / img_name).replace(self.annotation, self.jpeg)).convert('RGB')
+        img_tf = tvtf.Compose([
+            tvtf.ToTensor(),
+        ])
+        return img_tf(img)
+
+    def mask2tensor(self, anno_name):
+        anno = Image.open(
+            str(self.annotation_path / anno_name)).convert("P")
+        anno_tf = tvtf.Compose([
+        ])
+        return torch.Tensor(np.array(anno_tf(anno))).long()
 
     def __getitem__(self, inx):
-        print(self.frame_list[inx])
-        support_anno_name = self.frame_list[inx][0]
-        support_img_name = support_anno_name.replace("png", "jpg")
-        pres_anno_name = self.frame_list[inx][1]
-        pres_img_name = pres_anno_name.replace("png", "jpg")
-        query_anno_name = self.frame_list[inx][2]
-        query_img_name = query_anno_name.replace("png", "jpg")
+        support_anno_name, pres_anno_name, query_anno_name = self.frame_list[inx]
+        support_img_name, pres_img_name, query_img_name = \
+            map(lambda x: x.replace('png', 'jpg'), [support_anno_name,
+                                                    pres_anno_name,
+                                                    query_anno_name])
 
-        print(support_anno_name, query_anno_name)
+        support_img, pres_img, query_img = \
+            map(self.im2tensor, [support_img_name,
+                                 pres_img_name,
+                                 query_img_name])
 
-        def convert_img_tensor(img_name):
-            img = Image.open(str(
-                self.annotation_path / img_name).replace(self.annotation, self.jpeg)).convert('RGB')
-            arr = np.array(img)
-            img_tf = tvtf.Compose([
-                tvtf.ToTensor(),
-            ])
-            return img_tf(arr)
-
-        def convert_anno_tensor(anno_name):
-            anno = Image.open(
-                str(self.annotation_path / anno_name)).convert("L")
-            arr = np.array(anno)
-            anno_tf = tvtf.Compose([
-
-            ])
-            return torch.Tensor(anno_tf(arr)).long()
-
-        support_img = convert_img_tensor(support_img_name)
-        pres_img = convert_img_tensor(pres_img_name)
-        query_img = convert_img_tensor(query_img_name)
-
-        support_anno = convert_anno_tensor(support_anno_name)
-        pres_anno = convert_anno_tensor(pres_anno_name)
-        query_anno = convert_anno_tensor(query_anno_name)
+        support_anno, pres_anno, query_anno = \
+            map(self.mask2tensor, [support_anno_name,
+                                   pres_anno_name,
+                                   query_anno_name])
 
         return (support_img, support_anno, pres_img, query_img), (pres_anno, query_anno)
 
     def __len__(self):
         return len(self.frame_list)
+
 
 class DAVISPairRandomDataset(data.Dataset):
     def __init__(self, root_path=None,
@@ -270,14 +269,15 @@ class DAVISPairRandomDataset(data.Dataset):
             return random.sample(images, 2)
         elif mode == 1:
             return [images[0], images[random.randint(min_skip, max_skip)]]
-        elif mode == 2:    
+        elif mode == 2:
             return [images[random.randint(0, n-max_skip)], images[random.randint(min_skip, max_skip)]]
         else:
             raise Exception('Unknown mode')
 
     def __getitem__(self, inx):
         video_name = self.video_names[inx]
-        support_anno_name, query_anno_name = self.get_frame(self.mode, video_name)
+        support_anno_name, query_anno_name = self.get_frame(
+            self.mode, video_name)
         print(support_anno_name, query_anno_name)
         support_anno_name = video_name + '/' + support_anno_name
         query_anno_name = video_name + '/' + query_anno_name
@@ -296,7 +296,7 @@ class DAVISPairRandomDataset(data.Dataset):
 
         def convert_anno_tensor(anno_name):
             anno = Image.open(
-                str(self.annotation_path / anno_name)).convert("L")
+                str(self.annotation_path / anno_name)).convert("P")
             arr = np.array(anno)
             anno_tf = tvtf.Compose([
 
@@ -309,7 +309,6 @@ class DAVISPairRandomDataset(data.Dataset):
         support_anno = convert_anno_tensor(support_anno_name)
         query_anno = convert_anno_tensor(query_anno_name)
 
-        
         return (support_img, support_anno, query_img), query_anno
 
     def __len__(self):
