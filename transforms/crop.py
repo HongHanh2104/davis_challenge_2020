@@ -27,7 +27,7 @@ class RandomCrop:
         r1 = r0 + crop_size[0]
         c1 = c0 + crop_size[1]
 
-        return r0, r1, c0, c1
+        return r0, c0, r1, c1
 
 
 if __name__ == "__main__":
