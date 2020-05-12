@@ -18,10 +18,10 @@ class FocalLoss(nn.Module):
     def forward(self, input, target):
         if input.dim() > 2:
             # N,C,H,W => N,C,H*W
-            input = input.view(input.size(0), input.size(1), -1)
+            input = input.reshape(input.size(0), input.size(1), -1)
             input = input.transpose(1, 2)    # N,C,H*W => N,H*W,C
-            input = input.contiguous().view(-1, input.size(2))   # N,H*W,C => N*H*W,C
-        target = target.view(-1, 1)
+            input = input.reshape(-1, input.size(2))   # N,H*W,C => N*H*W,C
+        target = target.reshape(-1, 1)
 
         logpt = F.log_softmax(input, dim=1)
         logpt = logpt.gather(1, target)
@@ -31,7 +31,7 @@ class FocalLoss(nn.Module):
         if self.alpha is not None:
             if self.alpha.type() != input.detach().type():
                 self.alpha = self.alpha.type_as(input.detach())
-            at = self.alpha.gather(0, target.detach().view(-1))
+            at = self.alpha.gather(0, target.detach().reshape(-1))
             logpt = logpt * Variable(at)
 
         loss = -1 * (1-pt)**self.gamma * logpt
