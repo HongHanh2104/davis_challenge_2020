@@ -302,20 +302,76 @@ class STM(nn.Module):
             return self.segment(*args, **kwargs)
         else:
             return self.memorize(*args, **kwargs)
+        
+class SpatialTransformerModule(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # Localisation network
+        self.localization = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=7),
+            nn.MaxPool2d(2, stride=2),
+            nn.ReLU(True),
+            nn.Conv2d(64, 32, kernel_size=5),
+            nn.MaxPool2d(2, stride=2),
+            nn.ReLU(True)
+        )
+        
+        self.localization_m = nn.Sequential(
+            nn.Conv2d(11, 64, kernel_size=7),
+            nn.MaxPool2d(2, stride=2),
+            nn.ReLU(True),
+            nn.Conv2d(64, 32, kernel_size=5),
+            nn.MaxPool2d(2, stride=2),
+            nn.ReLU(True)
+        )
+
+        # Regressor for the 3 * 2 affine matrix
+        self.fc_loc = nn.Sequential(
+            nn.Linear(2 * 32 * 3 * 3, 32),
+            nn.ReLU(True),
+            nn.Linear(32, 3 * 2)
+        )
+
+        # Initialize the weights/bias with identity transformation
+        self.fc_loc[2].weight.data.zero_()
+        self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0],
+                                                    dtype=torch.float))
+
+    def forward(self, x, mask):
+        xs = self.localization(x)
+        mask = self.localization_m(mask.float())
+        
+        xs = F.adaptive_avg_pool2d(xs, output_size=(3, 3)).reshape(xs.size(0), -1)
+        mask = F.adaptive_avg_pool2d(mask, output_size=(3, 3)).reshape(mask.size(0), -1)
+        
+        xs = torch.cat([xs, mask], dim=1)
+        
+        theta = self.fc_loc(xs)
+        theta = theta.view(-1, 2, 3)
+
+        grid = F.affine_grid(theta, x.size(), align_corners=True)
+        x = F.grid_sample(x, grid, align_corners=True)
+        return x
 
 
 class STMOriginal(nn.Module):
     def __init__(self):
         super().__init__()
-        self.stm = STM()
+        stm = nn.DataParallel(STM())
+        stm.load_state_dict(torch.load('STM_weights.pth'))
+        self.stm = stm.module
+        self.stn = SpatialTransformerModule()
 
     def forward(self, inp):
-        a_im, a_seg, *b_ims, c_im = inp
+        self.stm.eval()
+
+        a_im, a_seg, *b_ims, c_im, nobjects = inp
         # {a,b,c}_im: B3HW, a_seg: BHW
-        num_objects = torch.LongTensor([[1]])
+        num_objects = torch.LongTensor([[nobjects]])
 
         # Memorize a
         a_seg = F.one_hot(a_seg, 11).permute(0, 3, 1, 2)
+        a_im = self.stn(a_im, a_seg)
         k, v = self.stm.memorize(a_im, a_seg, num_objects)
 
         for b_im in b_ims:
@@ -323,20 +379,11 @@ class STMOriginal(nn.Module):
             b_logit = self.stm.segment(b_im, k, v, num_objects)
             # Memorize b
             b_pred = F.softmax(b_logit, dim=1)
+            b_im = self.stn(b_im, b_pred)
             b_k, b_v = self.stm.memorize(b_im, b_pred, num_objects)
             k = torch.cat([k, b_k], dim=3)
             v = torch.cat([v, b_v], dim=3)
+        
         logit = self.stm.segment(c_im, k, v, num_objects)
 
         return logit
-
-        #ref_frame, ref_mask, q_frame = inp
-
-        #num_objects, _ = torch.max(ref_mask.reshape(ref_mask.size(0), -1), dim=1)
-        #num_objects = torch.LongTensor([[1]])
-
-        #ref_mask = F.one_hot(ref_mask, 11).permute(0, 3, 1, 2)
-
-        #k, v = self.stm.memorize(ref_frame, ref_mask, num_objects)
-        #logit = self.stm.segment(q_frame, k, v, num_objects)
-        #return logit
