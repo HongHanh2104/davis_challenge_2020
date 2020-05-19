@@ -18,6 +18,7 @@ class STM_DAVISTest(data.Dataset):
         self.mask_dir = os.path.join(root, 'Annotations', resolution)
         self.mask480_dir = os.path.join(root, 'Annotations', '480p')
         self.image_dir = os.path.join(root, 'JPEGImages', resolution)
+        self.guide_dir = os.path.join(root, 'Guide', resolution) 
         _imset_dir = os.path.join(root, 'ImageSets')
         _imset_f = os.path.join(_imset_dir, imset)
 
@@ -52,11 +53,15 @@ class STM_DAVISTest(data.Dataset):
 
         N_frames = []
         N_masks = []
+        N_guides = []
         for f in range(self.num_frames[video]):
             img_file = os.path.join(self.image_dir, video, '{:05d}.jpg'.format(f))
             frame = torchvision.transforms.ToTensor()(Image.open(img_file).convert('RGB'))
             frame = frame.unsqueeze(0)
             N_frames.append(frame)
+            guide = np.load(os.path.join(self.guide_dir, video, '{:05d}.npy'.format(f)))
+            guide = torch.tensor(guide).unsqueeze(0)
+            N_guides.append(guide)
             try:
                 mask_file = os.path.join(self.mask_dir, video, '{:05d}.png'.format(f))  
                 mask = torch.LongTensor(np.array(Image.open(mask_file).convert('P')))
@@ -67,6 +72,7 @@ class STM_DAVISTest(data.Dataset):
         
         Fs = torch.cat(N_frames).transpose(0, 1)
         Ms = F.one_hot(torch.cat(N_masks), self.K).permute(3,0,1,2).float()
+        Gs = torch.cat(N_guides).mean(-1)
         num_objects = torch.LongTensor([int(self.num_objects[video])])
         
-        return Fs, Ms, num_objects, info
+        return Fs, Ms, Gs, num_objects, info

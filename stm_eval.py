@@ -52,6 +52,7 @@ def get_arguments():
     parser.add_argument("-viz", help="Save visualization", action="store_true")
     parser.add_argument("-D", type=str, help="path to data",
                         default='/local/DATA')
+    parser.add_argument("-id", type=str, default="")
     return parser.parse_args()
 
 
@@ -80,8 +81,9 @@ x = os.listdir(DATA_ROOT + '/Annotations/480p/')[0]
 palette = Image.open(
     DATA_ROOT + f'/Annotations/480p/{x}/00000.png').getpalette()
 
+
 @torch.no_grad()
-def Run_video(Fs, Ms, num_frames, num_objects, Mem_every=None, Mem_number=None):
+def Run_video(Fs, Ms, Gs, num_frames, num_objects, Mem_every=None, Mem_number=None):
     # initialize storage tensors
     if Mem_every:
         to_memorize = [int(i)
@@ -100,6 +102,7 @@ def Run_video(Fs, Ms, num_frames, num_objects, Mem_every=None, Mem_number=None):
 
     augment_frames.append(torch.flip(first_frame, dims=(-1,)))
     augment_masks.append(torch.flip(first_mask, dims=(-1,)))
+    
     #augment_frames.append(torch.flip(first_frame, dims=(-2,)))
     #augment_masks.append(torch.flip(first_mask, dims=(-2,)))
     augment_size = len(augment_frames)
@@ -115,37 +118,46 @@ def Run_video(Fs, Ms, num_frames, num_objects, Mem_every=None, Mem_number=None):
     Es = torch.zeros_like(Ms)
     Es[:, :, 0] = Ms[:, :, 0]
 
-    for t in tqdm(range(1, num_frames)):
-        if t == 1:
-            this_keys, this_values = keys, values  # only prev memory
-        else:
-            # memorize
-            prev_key, prev_value = model(Fs[:, :, t-1], 
+    for _ in range(2):
+        for t in tqdm(range(1, num_frames)):
+            if t == 1:
+                this_keys, this_values = keys, values  # only prev memory
+            else:
+                # memorize
+                #hard_Es = torch.argmax(Es[:, :, t-1], dim=1)
+                #hard_Es = F.one_hot(hard_Es, 11).permute(0, 3, 1, 2)
+                prev_key, prev_value = model(Fs[:, :, t-1], 
+                                         # hard_Es,
                                          Es[:, :, t-1], 
                                          torch.tensor([num_objects]))
-            this_keys = torch.cat([keys, prev_key], dim=3)
-            this_values = torch.cat([values, prev_value], dim=3)
+                this_keys = torch.cat([keys, prev_key], dim=3)
+                this_values = torch.cat([values, prev_value], dim=3)
 
-        # segment
-        logit = model(Fs[:, :, t], 
-                      this_keys, this_values,
-                      torch.tensor([num_objects]))
-        Es[:, :, t] = F.softmax(logit, dim=1)
-
-        for _ in range(1):
-            k, v = model(Fs[:, :, t],
-                          Es[:, :, t],
+            # segment
+            logit = model(Fs[:, :, t], 
+                          this_keys, this_values,
                           torch.tensor([num_objects]))
-            k = torch.cat([this_keys, k], dim=3)
-            v = torch.cat([this_values, v], dim=3)
-            logit = model(Fs[:, :, t],
-                          k, v,
-                          torch.tensor([num_objects]))
-            Es[:, :, t] = F.softmax(logit, dim=1)
+            Es[:, :, t] = F.softmax(logit, dim=1)                    
 
-        # update
-        if t-1 in to_memorize:
-            keys, values = this_keys, this_values
+            N = 1
+            for _ in range(N):
+                # Es: 1, C, T, H, W
+                #hard_Es = torch.argmax(Es[:, :, t], dim=1) 
+                #hard_Es = F.one_hot(hard_Es, 11).permute(0, 3, 1, 2).float()
+                k, v = model(Fs[:, :, t],
+                             #hard_Es, 
+                             Es[:,:,t],
+                             torch.tensor([num_objects]))
+                k = torch.cat([this_keys, k], dim=3)
+                v = torch.cat([this_values, v], dim=3)
+                logit = model(Fs[:, :, t],
+                              k, v,
+                              torch.tensor([num_objects]))
+                Es[:, :, t] = F.softmax(logit, dim=1)
+
+            # update
+            if t-1 in to_memorize:
+                keys, values = this_keys, this_values
 
     pred = np.argmax(Es[0].cpu().numpy(), axis=0).astype(np.uint8)
 
@@ -165,18 +177,19 @@ pth_path = 'STM_weights.pth'
 print('Loading weights:', pth_path)
 model.load_state_dict(torch.load(pth_path))
 
-code_name = '{}_DAVIS_{}{}'.format(MODEL, YEAR, SET)
+code_name = '{}_DAVIS_{}{}{}'.format(MODEL, YEAR, SET, args.id)
 print('Start Testing:', code_name)
 
 for seq, V in enumerate(Testloader):
-    Fs, Ms, num_objects, info = V
+    Fs, Ms, Gs, num_objects, info = V
     seq_name = info['name'][0]
+
     num_frames = info['num_frames'][0].item()
     print('[{}]: num_frames: {}, num_objects: {}'.format(
         seq_name, num_frames, num_objects[0][0]))
 
-    pred, Es = Run_video(Fs, Ms, num_frames, num_objects,
-                         Mem_every=10, Mem_number=None)
+    pred, Es = Run_video(Fs, Ms, Gs, num_frames, num_objects,
+                         Mem_every=5, Mem_number=None)
 
     # Save results for quantitative eval ######################
     test_path = os.path.join('./test', code_name, seq_name)
