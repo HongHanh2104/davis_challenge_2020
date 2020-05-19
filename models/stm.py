@@ -358,9 +358,13 @@ class STMOriginal(nn.Module):
     def __init__(self):
         super().__init__()
         stm = nn.DataParallel(STM())
-        stm.load_state_dict(torch.load('STM_weights.pth'))
+        #stm.load_state_dict(torch.load('STM_weights.pth'))
         self.stm = stm.module
-        self.stn = SpatialTransformerModule()
+
+        #for p in self.stm.parameters():
+        #    p.requires_grad = False
+
+        #self.stn = SpatialTransformerModule()
 
     def forward(self, inp):
         self.stm.eval()
@@ -371,7 +375,7 @@ class STMOriginal(nn.Module):
 
         # Memorize a
         a_seg = F.one_hot(a_seg, 11).permute(0, 3, 1, 2)
-        a_im = self.stn(a_im, a_seg)
+        #a_im = self.stn(a_im, a_seg)
         k, v = self.stm.memorize(a_im, a_seg, num_objects)
 
         for b_im in b_ims:
@@ -379,7 +383,7 @@ class STMOriginal(nn.Module):
             b_logit = self.stm.segment(b_im, k, v, num_objects)
             # Memorize b
             b_pred = F.softmax(b_logit, dim=1)
-            b_im = self.stn(b_im, b_pred)
+            #b_im = self.stn(b_im, b_pred)
             b_k, b_v = self.stm.memorize(b_im, b_pred, num_objects)
             k = torch.cat([k, b_k], dim=3)
             v = torch.cat([v, b_v], dim=3)
