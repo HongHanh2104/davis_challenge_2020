@@ -1,13 +1,14 @@
-id: STMWithSTN
-pretrained: null #backup/STMOriginal-2020_05_08-19_27_48/best_metric_MeanIoU.pth
+id: STM-5-Pair
+pretrained: null #backup/STM-5-WarmUp-2020_05_18-08_41_27/best_metric_MeanIoU.pth
 seed: 3698
 model:
     name: STMOriginal
     args:
 optimizer:
-    name: SGD
+    name: Adam
     args:
-        lr: 0.00001
+        lr: 0.00005
+        #momentum: 0.5
 loss:
     name: CrossEntropyLoss
     #name: MixedLoss
@@ -39,14 +40,14 @@ scheduler:
         verbose: True
 dataset:
     train:
-        name: DAVISTripletRandomDataset
+        name: DAVISPairRandomDataset
         args:
-            root_path: data/DAVIS-trainval
+            root_path: data/YVOS-train
             resolution: 480p
             phase: train
             mode: 2
-            #max_skip: 5
-            max_npairs: 20
+            max_skip: 5
+            max_npairs: 1
         loader:
             name: DataLoader
             args:
