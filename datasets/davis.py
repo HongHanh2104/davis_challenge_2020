@@ -58,8 +58,12 @@ class DAVISCoreDataset(data.Dataset):
 
                 self.infos[folder.name] = dict()
 
-                anno_im = Image.open(str(folder / '00000.png')).convert('P')
-                self.infos[folder.name]['nobjects'] = np.max(anno_im)
+                frames = sorted(os.listdir(str(folder)))
+                nobjects = 0
+                for x in folder.iterdir():
+                    anno_im = Image.open(str(x)).convert('P')
+                    nobjects = max(nobjects, np.max(anno_im))
+                self.infos[folder.name]['nobjects'] = nobjects
                 self.infos[folder.name]['size'] = anno_im.size
 
                 jpeg_path = self.root_path / jpeg_folder / resolution / folder.name
@@ -69,16 +73,23 @@ class DAVISCoreDataset(data.Dataset):
         anno_path = str(self.annotation_path / img_name)
         jpeg_path = anno_path.replace(self.annotation, self.jpeg)
         img = Image.open(jpeg_path).convert('RGB')
-        img_tf = tvtf.Compose([
-            tvtf.ToTensor(),
-        ])
+
+        tfs = []
+        if self.is_train:
+            tfs.append(tvtf.Resize(384))
+        tfs.append(tvtf.ToTensor())
+
+        img_tf = tvtf.Compose(tfs)
         return img_tf(img)
 
     def mask2tensor(self, anno_name):
         anno_path = str(self.annotation_path / anno_name)
         anno = Image.open(anno_path).convert('P')
-        anno_tf = tvtf.Compose([
-        ])
+
+        tfs = []
+        if self.is_train:
+            tfs.append(tvtf.Resize(384))
+        anno_tf = tvtf.Compose(tfs)
         ret = torch.LongTensor(np.array(anno_tf(anno)))
         ret[ret > 10] = 0
         return ret
@@ -128,6 +139,7 @@ class DAVISPairDataset(DAVISCoreDataset):
             raise Exception('Unknown mode')
 
     def __getitem__(self, inx):
+        nobjects = self.frame_list[inx][2]
         support_anno_name = self.frame_list[inx][0]
         support_img_name = support_anno_name.replace(".png", ".jpg")
         query_anno_name = self.frame_list[inx][1]
@@ -139,7 +151,7 @@ class DAVISPairDataset(DAVISCoreDataset):
         support_anno = self.mask2tensor(support_anno_name)
         query_anno = self.mask2tensor(query_anno_name)
 
-        return (support_img, support_anno, query_img), query_anno
+        return (support_img, support_anno, query_img, nobjects), query_anno
 
     def __len__(self):
         return len(self.frame_list)
@@ -282,6 +294,11 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
         support_anno = self.mask2tensor(support_anno_name)
         query_anno = self.mask2tensor(query_anno_name)
 
+        if self.is_train:    
+            cropper = RandomCrop(384)
+            support_img, support_anno = self.random_crop(support_img, support_anno, cropper)
+            query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
+
         return (support_img, support_anno, query_img, nobjects), query_anno
 
     def __len__(self):
@@ -351,13 +368,13 @@ class DAVISTripletRandomDataset(DAVISCoreDataset):
                                    pres_anno_name,
                                    query_anno_name])
 
-        if self.is_train:    
+        if self.is_train:
             cropper = RandomCrop(384)
             support_img, support_anno = self.random_crop(support_img, support_anno, cropper)
             pres_img, pres_anno = self.random_crop(pres_img, pres_anno, cropper)
             query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
 
-        return (support_img, support_anno, pres_img, query_img, nobjects), query_anno #(pres_anno, query_anno)
+        return (support_img, support_anno, pres_img, query_img, nobjects), query_anno
 
     def __len__(self):
         return len(self.video_names)
