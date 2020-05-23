@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 
 from datasets.STM_DAVIS import STM_DAVISTest as DAVIS_MO_Test
-from models.stm import STM
+from models.stm import STM, STMOriginal
 
 import argparse
 import os
@@ -83,7 +83,9 @@ palette = Image.open(
 
 
 @torch.no_grad()
-def Run_video(Fs, Ms, Gs, num_frames, num_objects, Mem_every=None, Mem_number=None):
+def Run_video(Fs, Ms, Gs, num_frames, num_objects, 
+              Mem_every=None, Mem_number=None,
+              aug=False, nrefine=0, npass=1, hard_prev=False, hard_cur=False):
     # initialize storage tensors
     if Mem_every:
         to_memorize = [int(i)
@@ -94,31 +96,34 @@ def Run_video(Fs, Ms, Gs, num_frames, num_objects, Mem_every=None, Mem_number=No
     else:
         raise NotImplementedError
 
+    # Memorize first frame
     first_frame = Fs[:, :, 0]
     first_mask = Ms[:, :, 0]
-
-    augment_frames = []
-    augment_masks = []
-
-    augment_frames.append(torch.flip(first_frame, dims=(-1,)))
-    augment_masks.append(torch.flip(first_mask, dims=(-1,)))
-    
-    #augment_frames.append(torch.flip(first_frame, dims=(-2,)))
-    #augment_masks.append(torch.flip(first_mask, dims=(-2,)))
-    augment_size = len(augment_frames)
 
     keys, values = model(first_frame,
                          first_mask,
                          torch.tensor([num_objects]))
-    for aug_f, aug_m in zip(augment_frames, augment_masks):
-        new_k, new_v = model(aug_f, aug_m, torch.tensor([num_objects]))
-        keys = torch.cat([keys, new_k], dim=3)
-        values = torch.cat([values, new_v], dim=3)
+
+    # Augmentation
+    if aug:
+        augment_frames = []
+        augment_masks = []
+
+        augment_frames.append(torch.flip(first_frame, dims=(-1,)))
+        augment_masks.append(torch.flip(first_mask, dims=(-1,)))
+    
+        augment_size = len(augment_frames)
+
+        for aug_f, aug_m in zip(augment_frames, augment_masks):
+            new_k, new_v = model(aug_f, aug_m, torch.tensor([num_objects]))
+            keys = torch.cat([keys, new_k], dim=3)
+            values = torch.cat([values, new_v], dim=3)
 
     Es = torch.zeros_like(Ms)
     Es[:, :, 0] = Ms[:, :, 0]
 
-    for _ in range(2):
+    # Multi-pass
+    for _ in range(npass):
         for t in tqdm(range(1, num_frames)):
             if t == 1:
                 this_keys, this_values = keys, values  # only prev memory
@@ -139,8 +144,7 @@ def Run_video(Fs, Ms, Gs, num_frames, num_objects, Mem_every=None, Mem_number=No
                           torch.tensor([num_objects]))
             Es[:, :, t] = F.softmax(logit, dim=1)                    
 
-            N = 1
-            for _ in range(N):
+            for _ in range(nrefine):
                 # Es: 1, C, T, H, W
                 #hard_Es = torch.argmax(Es[:, :, t], dim=1) 
                 #hard_Es = F.one_hot(hard_Es, 11).permute(0, 3, 1, 2).float()
@@ -168,14 +172,24 @@ Testset = DAVIS_MO_Test(DATA_ROOT, resolution='480p',
 Testloader = data.DataLoader(
     Testset, batch_size=1, shuffle=False, num_workers=2, pin_memory=True)
 
-model = nn.DataParallel(STM())
+if True:
+    model = nn.DataParallel(STM())
+else:
+    model = STMOriginal()
+
 if torch.cuda.is_available():
     model.cuda()
 model.eval()  # turn-off BN
 
-pth_path = 'STM_weights.pth'
-print('Loading weights:', pth_path)
-model.load_state_dict(torch.load(pth_path))
+if False:
+    pth_path = 'STM_weights.pth'
+    print('Loading weights:', pth_path)
+    model.load_state_dict(torch.load(pth_path))
+elif False:
+    pth_path = 'backup/STM-Triplet-YVOS/best_metric_MeanIoU.pth'
+    print('Loading weights:', pth_path)
+    model.load_state_dict(torch.load(pth_path)['model_state_dict'])
+    model = nn.DataParallel(model.stm)
 
 code_name = '{}_DAVIS_{}{}{}'.format(MODEL, YEAR, SET, args.id)
 print('Start Testing:', code_name)
