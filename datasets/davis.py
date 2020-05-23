@@ -151,7 +151,7 @@ class DAVISPairDataset(DAVISCoreDataset):
         support_anno = self.mask2tensor(support_anno_name)
         query_anno = self.mask2tensor(query_anno_name)
 
-        return (support_img, support_anno, query_img, nobjects), query_anno
+        return (support_img, support_anno, query_img, nobjects), (query_anno,)
 
     def __len__(self):
         return len(self.frame_list)
@@ -194,7 +194,7 @@ class DAVISTripletDataset(DAVISCoreDataset):
                     for i in range(n - k)]
         elif mode == 1:
             return [(images[0], images[k - 1], images[k])
-                    for k in range(1 + min_skip, max_skip)]
+                    for k in range(1 + min_skip, max_skip + 1)]
         elif mode == 2:
             indices = [(i, j, k)
                        for i in range(n-2)
@@ -235,7 +235,7 @@ class DAVISTripletDataset(DAVISCoreDataset):
             pres_img, pres_anno = self.random_crop(pres_img, pres_anno, cropper)
             query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
 
-        return (support_img, support_anno, pres_img, query_img, nobjects), query_anno #(pres_anno, query_anno)
+        return (support_img, support_anno, pres_img, query_img, nobjects), (pres_anno, query_anno)
     def __len__(self):
         return len(self.frame_list)
 
@@ -298,8 +298,11 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
             cropper = RandomCrop(384)
             support_img, support_anno = self.random_crop(support_img, support_anno, cropper)
             query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
+            
+            if len(set(np.unique(query_anno)).difference(np.unique(support_anno))):
+                return self.__getitem__(inx)
 
-        return (support_img, support_anno, query_img, nobjects), query_anno
+        return (support_img, support_anno, query_img, nobjects), (query_anno,)
 
     def __len__(self):
         return len(self.video_names)
@@ -374,7 +377,16 @@ class DAVISTripletRandomDataset(DAVISCoreDataset):
             pres_img, pres_anno = self.random_crop(pres_img, pres_anno, cropper)
             query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
 
-        return (support_img, support_anno, pres_img, query_img, nobjects), query_anno
+            query_objs = set(np.unique(query_anno))
+            support_objs = set(np.unique(support_anno))
+            pres_objs = set(np.unique(pres_anno))
+            excess_objs = len(query_objs.difference(support_objs)) + \
+                          len(query_objs.difference(pres_objs)) + \
+                          len(pres_objs.difference(support_objs))
+            if excess_objs:
+                return self.__getitem__(inx)
+
+        return (support_img, support_anno, pres_img, query_img, nobjects), (pres_anno, query_anno)
 
     def __len__(self):
         return len(self.video_names)
