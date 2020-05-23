@@ -378,9 +378,11 @@ class STMOriginal(nn.Module):
         #a_im = self.stn(a_im, a_seg)
         k, v = self.stm.memorize(a_im, a_seg, num_objects)
 
+        b_logits = []
         for b_im in b_ims:
             # Segment b
             b_logit = self.stm.segment(b_im, k, v, num_objects)
+            b_logits.append(b_logit)
             # Memorize b
             b_pred = F.softmax(b_logit, dim=1)
             #b_im = self.stn(b_im, b_pred)
@@ -390,4 +392,4 @@ class STMOriginal(nn.Module):
         
         logit = self.stm.segment(c_im, k, v, num_objects)
 
-        return logit
+        return (*b_logits, logit)
