@@ -59,9 +59,13 @@ class STM_DAVISTest(data.Dataset):
             frame = torchvision.transforms.ToTensor()(Image.open(img_file).convert('RGB'))
             frame = frame.unsqueeze(0)
             N_frames.append(frame)
-            guide = np.load(os.path.join(self.guide_dir, video, '{:05d}.npy'.format(f)))
-            guide = torch.tensor(guide).unsqueeze(0)
-            N_guides.append(guide)
+            try:
+                guide = np.load(os.path.join(self.guide_dir, video, '{:05d}.npy'.format(f)))
+                guide = torch.tensor(guide).unsqueeze(0)
+                N_guides.append(guide)
+            except:
+                N_guides.append(torch.ones(1,*frame.shape[-2:]))
+
             try:
                 mask_file = os.path.join(self.mask_dir, video, '{:05d}.png'.format(f))  
                 mask = torch.LongTensor(np.array(Image.open(mask_file).convert('P')))
