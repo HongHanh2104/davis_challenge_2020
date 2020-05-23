@@ -1,5 +1,5 @@
-id: STM-5-Pair
-pretrained: null #backup/STM-5-WarmUp-2020_05_18-08_41_27/best_metric_MeanIoU.pth
+id: STM-YVOS-Triplet
+pretrained: null #backup/STM-WarmUp-YVOS/best_metric_MeanIoU.pth
 seed: 3698
 model:
     name: STMOriginal
@@ -7,10 +7,11 @@ model:
 optimizer:
     name: Adam
     args:
-        lr: 0.00005
+        lr: 0.0001
         #momentum: 0.5
 loss:
-    name: CrossEntropyLoss
+    name: MultiCELoss
+    #name: CrossEntropyLoss
     #name: MixedLoss
     #args:
     #    losses:
@@ -22,7 +23,7 @@ loss:
     #        - name: CrossEntropyLoss
     #          args:
 metric:
-    - name: MeanIoU
+    - name: ModifiedMeanIoU
       args:
           nclasses: 11
     #- name: PixelAccuracy
@@ -40,7 +41,7 @@ scheduler:
         verbose: True
 dataset:
     train:
-        name: DAVISPairRandomDataset
+        name: DAVISTripletRandomDataset
         args:
             root_path: data/YVOS-train
             resolution: 480p
