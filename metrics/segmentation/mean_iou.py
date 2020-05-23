@@ -53,3 +53,7 @@ class MeanIoU():
         print(f'mIoU: {self.value():.6f}')
         for i, x in enumerate(class_iou):
             print(f'\tClass {i:3d}: {x:.6f}')
+
+class ModifiedMeanIoU(MeanIoU):
+    def calculate(self, output, target):
+        return super().calculate(output[-1], target[-1])
