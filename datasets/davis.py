@@ -4,6 +4,7 @@ from torchvision import transforms as tvtf
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from transforms.normalize import NormMaxMin, Normalize
 from transforms.crop import RandomCrop
@@ -51,7 +52,8 @@ class DAVISCoreDataset(data.Dataset):
         self.video_names = []
         self.infos = dict()
 
-        for folder in self.annotation_path.iterdir():
+        print('Loading data...')
+        for folder in tqdm(self.annotation_path.iterdir()):
             video_id = folder.name.split('_')[0]
             if video_id in video_name_prefixes:
                 self.video_names.append(folder.name)
@@ -298,9 +300,14 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
             cropper = RandomCrop(384)
             support_img, support_anno = self.random_crop(support_img, support_anno, cropper)
             query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
-            
-            if len(set(np.unique(query_anno)).difference(np.unique(support_anno))):
-                return self.__getitem__(inx)
+           
+            query_objs = np.unique(query_anno)
+            support_objs = np.unique(support_anno)
+            excess_objs = np.setdiff1d(query_objs, support_objs)
+            #if len(excess_objs):
+            #    return self.__getitem__(inx)
+            for obj in excess_objs:
+                query_anno[query_anno == obj] = 0
 
         return (support_img, support_anno, query_img, nobjects), (query_anno,)
 

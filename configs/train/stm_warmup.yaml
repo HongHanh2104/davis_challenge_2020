@@ -5,10 +5,11 @@ model:
     name: STMOriginal
     args:
 optimizer:
-    name: Adam
+    name: SGD
     args:
-        lr: 0.0001
-        #momentum: 0.5
+        lr: 0.0005
+        momentum: 0.9
+        nesterov: True
 loss:
     name: MultiCELoss
     #name: CrossEntropyLoss
