@@ -1,0 +1,74 @@
+id: STM-YVOS-WarmUp
+pretrained: null #backup/STM-WarmUp-YVOS/best_metric_MeanIoU.pth
+seed: 3698
+model:
+    name: STMOriginal
+    args:
+optimizer:
+    name: SGD
+    args:
+        lr: 0.0005
+        momentum: 0.9
+        nesterov: True
+loss:
+    name: MultiCELoss
+    #name: CrossEntropyLoss
+    #name: MixedLoss
+    #args:
+    #    losses:
+    #        - name: FocalLoss
+    #          args:
+    #            gamma: 2
+    #        - name: DiceLoss
+    #          args:
+    #        - name: CrossEntropyLoss
+    #          args:
+metric:
+    - name: ModifiedMeanIoU
+      args:
+          nclasses: 11
+    #- name: PixelAccuracy
+    #  args:
+    #      nclasses: 2
+    #- name: DiceScore
+    #  args:
+    #      nclasses: 2
+scheduler:
+    name: ReduceLROnPlateau
+    args:
+        mode: min
+        factor: 0.5
+        patience: 5
+        verbose: True
+dataset:
+    train:
+        name: DAVISPairRandomDataset
+        args:
+            root_path: data/YVOS-train
+            resolution: 480p
+            phase: train
+            mode: 2
+            max_skip: 5
+            max_npairs: 1
+        loader:
+            name: DataLoader
+            args:
+                batch_size: 1
+                shuffle: True
+    val:
+        name: DAVISTripletDataset
+        args:
+            root_path: data/DAVIS-trainval
+            resolution: 480p
+            phase: val
+            mode: 1
+            is_train: False
+            #max_npairs: 1
+        loader:
+            name: DataLoader
+            args:
+                batch_size: 1
+trainer:
+    nepochs: 50
+    val_step: 1
+    log_step: 1

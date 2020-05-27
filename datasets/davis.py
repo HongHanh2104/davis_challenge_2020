@@ -4,6 +4,7 @@ from torchvision import transforms as tvtf
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from transforms.normalize import NormMaxMin, Normalize
 from transforms.crop import RandomCrop
@@ -51,7 +52,8 @@ class DAVISCoreDataset(data.Dataset):
         self.video_names = []
         self.infos = dict()
 
-        for folder in self.annotation_path.iterdir():
+        print('Loading data...')
+        for folder in tqdm(self.annotation_path.iterdir()):
             video_id = folder.name.split('_')[0]
             if video_id in video_name_prefixes:
                 self.video_names.append(folder.name)
@@ -151,7 +153,7 @@ class DAVISPairDataset(DAVISCoreDataset):
         support_anno = self.mask2tensor(support_anno_name)
         query_anno = self.mask2tensor(query_anno_name)
 
-        return (support_img, support_anno, query_img, nobjects), query_anno
+        return (support_img, support_anno, query_img, nobjects), (query_anno,)
 
     def __len__(self):
         return len(self.frame_list)
@@ -194,7 +196,7 @@ class DAVISTripletDataset(DAVISCoreDataset):
                     for i in range(n - k)]
         elif mode == 1:
             return [(images[0], images[k - 1], images[k])
-                    for k in range(1 + min_skip, max_skip)]
+                    for k in range(1 + min_skip, max_skip + 1)]
         elif mode == 2:
             indices = [(i, j, k)
                        for i in range(n-2)
@@ -235,7 +237,7 @@ class DAVISTripletDataset(DAVISCoreDataset):
             pres_img, pres_anno = self.random_crop(pres_img, pres_anno, cropper)
             query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
 
-        return (support_img, support_anno, pres_img, query_img, nobjects), query_anno #(pres_anno, query_anno)
+        return (support_img, support_anno, pres_img, query_img, nobjects), (pres_anno, query_anno)
     def __len__(self):
         return len(self.frame_list)
 
@@ -298,8 +300,16 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
             cropper = RandomCrop(384)
             support_img, support_anno = self.random_crop(support_img, support_anno, cropper)
             query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
+           
+            query_objs = np.unique(query_anno)
+            support_objs = np.unique(support_anno)
+            excess_objs = np.setdiff1d(query_objs, support_objs)
+            #if len(excess_objs):
+            #    return self.__getitem__(inx)
+            for obj in excess_objs:
+                query_anno[query_anno == obj] = 0
 
-        return (support_img, support_anno, query_img, nobjects), query_anno
+        return (support_img, support_anno, query_img, nobjects), (query_anno,)
 
     def __len__(self):
         return len(self.video_names)
@@ -374,7 +384,16 @@ class DAVISTripletRandomDataset(DAVISCoreDataset):
             pres_img, pres_anno = self.random_crop(pres_img, pres_anno, cropper)
             query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
 
-        return (support_img, support_anno, pres_img, query_img, nobjects), query_anno
+            query_objs = set(np.unique(query_anno))
+            support_objs = set(np.unique(support_anno))
+            pres_objs = set(np.unique(pres_anno))
+            excess_objs = len(query_objs.difference(support_objs)) + \
+                          len(query_objs.difference(pres_objs)) + \
+                          len(pres_objs.difference(support_objs))
+            if excess_objs:
+                return self.__getitem__(inx)
+
+        return (support_img, support_anno, pres_img, query_img, nobjects), (pres_anno, query_anno)
 
     def __len__(self):
         return len(self.video_names)
