@@ -2,6 +2,7 @@ from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
 from datasets.davis import *
+from datasets.coco import *
 
 import argparse
 
@@ -44,7 +45,7 @@ def visualize_pair(dataset):
 def visualize_triplet(dataset):
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
     for idx, batch in enumerate(dataloader):
-        for a_img, a_anno, b_img, c_img, b_anno, c_anno in zip(*batch[0], *batch[1]):
+        for a_img, a_anno, b_img, c_img, nobjects, b_anno, c_anno in zip(*batch[0], *batch[1]):
             fig, ax = plt.subplots(3, 2)
             ax[0, 0].imshow(a_img.permute(1, 2, 0))
             ax[0, 1].imshow(a_anno.squeeze())
@@ -105,6 +106,20 @@ def test_davis_triplet():
 
     visualize_triplet(dataset)
 
+def test_synthetic_triplet():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--root', help='Path to the COCO dataset')
+    parser.add_argument('--ann', help='The annotation subfolder (of ROOT)',
+                        default='annotations')
+    parser.add_argument('--data_type', help='train_[year] or val_[year]',
+                        default='val2017')
+
+    args = parser.parse_args()
+    coco = COCODataset(root_path=args.root, data_type=args.data_type, 
+                ann_folder=args.ann)
+    dataset = SyntheticTripletDataset(coco)
+
+    visualize_triplet(dataset)
 
 if __name__ == "__main__":
-    test_davis_triplet()
+    test_synthetic_triplet()

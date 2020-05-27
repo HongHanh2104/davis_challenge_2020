@@ -1,12 +1,14 @@
 import torchvision.transforms.functional as F
-from torchvision.transforms import RandomCrop
+from torchvision.transforms import RandomAffine
 from PIL import Image
 import random
-   
-class MultiRandomCrop(RandomCrop):
+import numpy as np
+
+class MultiRandomAffine(RandomAffine):
+    
     def __call__(self, frame):
-        i, j, h, w = self.get_params(frame[0], self.size)
-        return list(map(lambda x: F.crop(x, i, j, h, w), frame))
+        ret = self.get_params(self.degrees, self.translate, self.scale, self.shear, frame[0].size)
+        return list(map(lambda x: F.affine(x, *ret, resample=self.resample, fillcolor=self.fillcolor), frame))
 
 if __name__ == "__main__":
     import argparse
@@ -21,17 +23,16 @@ if __name__ == "__main__":
 
     img = Image.open(os.path.join(args.root, args.img)).convert('RGB')
     ann = Image.open(os.path.join(args.root, args.ann)).convert('P')
-    #print(img.size, ann.size)
-    
-    croped_img, croped_ann =  MultiRandomCrop(size=384)((img,ann))
-
-    #print(croped_img.size, croped_ann.size)
+    print(img.size, ann.size)
+    affined_img, affined_ann =  MultiRandomAffine(degrees=(-20, 20),
+                                                  scale=(0.9, 1.1),
+                                                  shear=(-10, 10))((img, ann))
+    print(affined_img.size, affined_ann.size)
     fig, ax = plt.subplots(2)
     ax[0].imshow(img)
     ax[0].imshow(ann, alpha=0.5)
-    ax[1].imshow(croped_img)
-    ax[1].imshow(croped_ann, alpha=0.5)
+    ax[1].imshow(affined_img)
+    ax[1].imshow(affined_ann, alpha=0.5)
     fig.tight_layout()
     plt.show()
     plt.close()
-
