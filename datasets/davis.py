@@ -8,6 +8,9 @@ from tqdm import tqdm
 
 from transforms.normalize import NormMaxMin, Normalize
 from transforms.crop import RandomCrop
+from transforms.crop import MultiRandomCrop
+from transforms.affine import MultiRandomAffine
+from transforms.resize import MultiRandomResize
 
 from itertools import permutations
 from pathlib import Path
@@ -71,6 +74,25 @@ class DAVISCoreDataset(data.Dataset):
                 jpeg_path = self.root_path / jpeg_folder / resolution / folder.name
                 self.infos[folder.name]['length'] = len(list(jpeg_path.iterdir()))
 
+    def _load_frame(self, img_name):
+        # Load annotated mask
+        anno_path = str(self.annotation_path / img_name)
+        mask = Image.open(anno_path).convert('P')
+
+        # Load frame image
+        jpeg_path = anno_path.replace(self.annotation, self.jpeg).replace('.png', '.jpg')
+        img = Image.open(jpeg_path).convert('P')
+
+        # Augmentation (if train)
+        if self.is_train:
+            img, mask = self._augmentation(img, mask)
+
+        # Convert to tensor
+        img = tvtf.ToTensor()(img)
+        mask = torch.LongTensor(np.array(mask))
+        
+        return img, mask
+
     def im2tensor(self, img_name):
         anno_path = str(self.annotation_path / img_name)
         jpeg_path = anno_path.replace(self.annotation, self.jpeg)
@@ -96,6 +118,38 @@ class DAVISCoreDataset(data.Dataset):
         ret[ret > 10] = 0
         return ret
 
+    def _augmentation(self, img, mask):
+        img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        img, mask = MultiRandomCrop(size=384)((img, mask))
+        img, mask = MultiRandomAffine(degrees=(-15, 15),
+                                      scale=(0.95, 1.05),
+                                      shear=(-10, 10))((img, mask))
+        return img, mask
+
+    def _filter_small_objs(self, mask, thres):
+        # Filter small objects
+        ori_objs = np.unique(mask)
+        for obj in ori_objs:
+            area = (mask == obj).sum().item()
+            if area < thres:
+                mask[mask == obj] = 0
+        return mask
+
+    def _filter_excessive_objs(self, masks):
+        # Filter excessive objects
+        ori_objs = np.unique(masks[0])
+        for i in range(1, len(masks)):
+            mask_objs = np.unique(masks[i])
+            excess_objs = np.setdiff1d(mask_objs, ori_objs)
+            for obj in excess_objs:
+                masks[i][masks[i] == obj] = 0
+        return masks
+        
+    def _filter(self, masks, small_obj_thres=1000):
+        masks[0] = self._filter_small_objs(masks[0], small_obj_thres)
+        masks = self._filter_excessive_objs(masks)
+        return masks
+    
 
 class DAVISPairDataset(DAVISCoreDataset):
     def __init__(self,
@@ -287,6 +341,13 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
         support_anno_name = video_name + '/' + support_anno_name
         query_anno_name = video_name + '/' + query_anno_name
 
+        ref_img, ref_mask = self._load_frame(support_anno_name)
+        query_img, query_mask = self._load_frame(query_anno_name)
+        ref_mask, query_mask = self._filter([ref_mask, query_mask])
+        
+        return (ref_img, ref_mask, query_img, nobjects), (query_mask,)
+
+        '''
         support_img_name = support_anno_name.replace(".png", ".jpg")
         query_img_name = query_anno_name.replace(".png", ".jpg")
 
@@ -310,6 +371,7 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
                 query_anno[query_anno == obj] = 0
 
         return (support_img, support_anno, query_img, nobjects), (query_anno,)
+        '''
 
     def __len__(self):
         return len(self.video_names)

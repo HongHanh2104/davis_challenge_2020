@@ -65,8 +65,9 @@ class COCODataset(data.Dataset):
         return len(self.imgIds)
 
 class SyntheticTripletDataset:
-    def __init__(self, dataset):
+    def __init__(self, dataset, niters):
         self.dataset = dataset
+        self.niters = niters
 
     def _augmentation(self, img, mask):
         img, mask = MultiRandomResize(resize_value=384)((img, mask))
@@ -101,10 +102,10 @@ class SyntheticTripletDataset:
         return masks
     
     def __getitem__(self, i):
+        i = random.randrange(0, len(self.dataset))
         ori_img, ori_mask = self.dataset[i]
         ims, masks = zip(*[self._augmentation(ori_img, ori_mask) 
                            for _ in range(3)])
-        
         im_0, im_1, im_2 = map(tvtf.ToTensor(), ims)
         mask2tensor = lambda x: torch.tensor(np.array(x))
         masks = list(map(mask2tensor, masks))
@@ -113,4 +114,4 @@ class SyntheticTripletDataset:
         return (im_0, mask_0, im_1, im_2, nobjects), (mask_1, mask_2)
     
     def __len__(self):
-        return len(self.dataset)
+        return self.niters
