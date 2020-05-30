@@ -12,16 +12,20 @@ class MultiRandomResize:
         w, h = frame[0].size
 
         to_size = min(w, h)
-        min_size = min(self.resize_value, 384)
-        max_size = max(self.resize_value, to_size)
-        random_value = random.randint(min_size, max_size)
+        if to_size <= self.resize_value:
+            random_value = self.resize_value
+        else:
+            random_value = random.randint(self.resize_value, to_size)
+        #min_size = min(self.resize_value, to_size)
+        #max_size = max(self.resize_value, to_size)
+        #random_value = max(self.resize_value, random.randint(min_size, max_size))
         
         img = F.resize(frame[0], 
                        size=random_value, 
-                       interpolation=Image.NEAREST)
+                       interpolation=Image.BILINEAR)
         ann = F.resize(frame[1],
                        size=random_value,
-                       interpolation=Image.BILINEAR)
+                       interpolation=Image.NEAREST)
         return img, ann 
 
 if __name__ == "__main__":

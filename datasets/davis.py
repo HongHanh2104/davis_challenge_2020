@@ -81,7 +81,7 @@ class DAVISCoreDataset(data.Dataset):
 
         # Load frame image
         jpeg_path = anno_path.replace(self.annotation, self.jpeg).replace('.png', '.jpg')
-        img = Image.open(jpeg_path).convert('P')
+        img = Image.open(jpeg_path).convert('RGB')
 
         # Augmentation (if train)
         if self.is_train:
@@ -120,6 +120,8 @@ class DAVISCoreDataset(data.Dataset):
 
     def _augmentation(self, img, mask):
         img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        #img = tvtf.Resize(384)(img)
+        #mask = tvtf.Resize(384)(mask)
         img, mask = MultiRandomCrop(size=384)((img, mask))
         img, mask = MultiRandomAffine(degrees=(-15, 15),
                                       scale=(0.95, 1.05),
@@ -343,7 +345,11 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
 
         ref_img, ref_mask = self._load_frame(support_anno_name)
         query_img, query_mask = self._load_frame(query_anno_name)
-        ref_mask, query_mask = self._filter([ref_mask, query_mask])
+
+        if self.is_train:
+            ref_mask, query_mask = self._filter([ref_mask, query_mask])
+            #if len(np.unique(ref_mask)) == 0:
+            #    return self.__getitem__(inx)
         
         return (ref_img, ref_mask, query_img, nobjects), (query_mask,)
 
