@@ -3,7 +3,7 @@ from torchvision.transforms import RandomCrop
 from PIL import Image
 import random
 
-class RandomCrop:
+class MyRandomCrop:
     def __init__(self, crop_size):
         assert isinstance(crop_size, (int, float, list, tuple)), \
             f'Invalid type, expect (int, float, list, tuple), get {type(crop_size)}'
