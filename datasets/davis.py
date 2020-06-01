@@ -49,7 +49,7 @@ class DAVISCoreDataset(data.Dataset):
         self.annotation_path = self.root_path / annotation_folder / resolution
 
         # Load video name prefixes (ex: bear for bear_1)
-        txt_path = self.root_path / imageset_folder / year / f"{phase}.txt"
+        txt_path = self.root_path / imageset_folder / str(year) / f"{phase}.txt"
         with open(txt_path) as files:
             video_name_prefixes = [filename.strip() for filename in files]
 
