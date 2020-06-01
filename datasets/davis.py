@@ -18,6 +18,7 @@ from pathlib import Path
 from enum import Enum
 import os
 import random
+import json
 
 
 class DAVISCoreDataset(data.Dataset):
@@ -66,14 +67,14 @@ class DAVISCoreDataset(data.Dataset):
 
                 # YoutubeVOS provides a meta.json file
                 if os.path.exists(str(self.root_path / 'meta.json')):
-                    json_data = json.load(open(str(self.root_path / 'meta.json')))
+                    json_data = json.load(
+                        open(str(self.root_path / 'meta.json')))
                     nobjects = len(json_data['videos'][video_id]['objects'])
                     for x in folder.iterdir():
                         anno_im = Image.open(str(x)).convert('P')
                         break
-                # DAVIS does not, load all files just in case
+                # Others might not, load all files just in case
                 else:
-                    frames = sorted(os.listdir(str(folder)))
                     nobjects = 0
                     for x in folder.iterdir():
                         anno_im = Image.open(str(x)).convert('P')
@@ -82,7 +83,8 @@ class DAVISCoreDataset(data.Dataset):
                 self.infos[folder.name]['size'] = anno_im.size
 
                 jpeg_path = self.root_path / jpeg_folder / resolution / folder.name
-                self.infos[folder.name]['length'] = len(list(jpeg_path.iterdir()))
+                self.infos[folder.name]['length'] = len(
+                    list(jpeg_path.iterdir()))
 
     def _load_frame(self, img_name):
         # Load annotated mask
@@ -90,7 +92,8 @@ class DAVISCoreDataset(data.Dataset):
         mask = Image.open(anno_path).convert('P')
 
         # Load frame image
-        jpeg_path = anno_path.replace(self.annotation, self.jpeg).replace('.png', '.jpg')
+        jpeg_path = anno_path.replace(self.annotation, self.jpeg)
+        jpeg_path = jpeg_path.replace('.png', '.jpg')
         img = Image.open(jpeg_path).convert('RGB')
 
         # Augmentation (if train)
@@ -100,7 +103,7 @@ class DAVISCoreDataset(data.Dataset):
         # Convert to tensor
         img = tvtf.ToTensor()(img)
         mask = torch.LongTensor(np.array(mask))
-        
+
         return img, mask
 
     def im2tensor(self, img_name):
@@ -129,7 +132,7 @@ class DAVISCoreDataset(data.Dataset):
         return ret
 
     def _augmentation(self, img, mask):
-        #img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        # img, mask = MultiRandomResize(resize_value=384)((img, mask))
         img = tvtf.Resize(384)(img)
         mask = tvtf.Resize(384, 0)(mask)
         img, mask = MultiRandomCrop(size=384)((img, mask))
@@ -156,12 +159,12 @@ class DAVISCoreDataset(data.Dataset):
             for obj in excess_objs:
                 masks[i][masks[i] == obj] = 0
         return masks
-        
+
     def _filter(self, masks, small_obj_thres=1000):
         masks[0] = self._filter_small_objs(masks[0], small_obj_thres)
         masks = self._filter_excessive_objs(masks)
         return masks
-    
+
 
 class DAVISPairDataset(DAVISCoreDataset):
     def __init__(self,
@@ -247,7 +250,8 @@ class DAVISTripletDataset(DAVISCoreDataset):
                 support_anno = video_name + "/" + pair[0]
                 pres_anno = video_name + "/" + pair[1]
                 query_anno = video_name + "/" + pair[2]
-                self.frame_list.append((support_anno, pres_anno, query_anno, nobjects))
+                self.frame_list.append(
+                    (support_anno, pres_anno, query_anno, nobjects))
 
     def get_frame(self, mode, video_name):
         images = sorted(os.listdir(str(self.annotation_path / video_name)))
@@ -291,21 +295,26 @@ class DAVISTripletDataset(DAVISCoreDataset):
             map(self.im2tensor, [support_img_name,
                                  pres_img_name,
                                  query_img_name])
-        
+
         support_anno, pres_anno, query_anno = \
             map(self.mask2tensor, [support_anno_name,
                                    pres_anno_name,
                                    query_anno_name])
 
-        if self.is_train:    
+        if self.is_train:
             cropper = RandomCrop(384)
-            support_img, support_anno = self.random_crop(support_img, support_anno, cropper)
-            pres_img, pres_anno = self.random_crop(pres_img, pres_anno, cropper)
-            query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
+            support_img, support_anno = self.random_crop(
+                support_img, support_anno, cropper)
+            pres_img, pres_anno = self.random_crop(
+                pres_img, pres_anno, cropper)
+            query_img, query_anno = self.random_crop(
+                query_img, query_anno, cropper)
 
         return (support_img, support_anno, pres_img, query_img, nobjects), (pres_anno, query_anno)
+
     def __len__(self):
         return len(self.frame_list)
+
 
 class DAVISPairRandomDataset(DAVISCoreDataset):
     def __init__(self,
@@ -319,7 +328,7 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
         self.mode = mode
         self.min_skip = min_skip
         self.max_skip = max_skip
-        
+
         self.video_names = self.video_names * max_npairs
 
     def get_frame(self, mode, video_name):
@@ -358,9 +367,9 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
 
         if self.is_train:
             ref_mask, query_mask = self._filter([ref_mask, query_mask])
-            #if len(np.unique(ref_mask)) == 0:
+            # if len(np.unique(ref_mask)) == 0:
             #    return self.__getitem__(inx)
-        
+
         return (ref_img, ref_mask, query_img, nobjects), (query_mask,)
 
         '''
@@ -392,6 +401,7 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
     def __len__(self):
         return len(self.video_names)
 
+
 class DAVISTripletRandomDataset(DAVISCoreDataset):
     def __init__(self,
                  mode=0,
@@ -404,7 +414,7 @@ class DAVISTripletRandomDataset(DAVISCoreDataset):
         self.mode = mode
         self.min_skip = min_skip
         self.max_skip = max_skip
-        
+
         self.video_names = self.video_names * max_npairs
 
     def get_frame(self, mode, video_name):
@@ -441,16 +451,22 @@ class DAVISTripletRandomDataset(DAVISCoreDataset):
         pres_anno_name = video_name + '/' + pres_anno_name
         query_anno_name = video_name + '/' + query_anno_name
 
-        support_img_name, pres_img_name, query_img_name = \
-            map(lambda x: x.replace('png', 'jpg'), [support_anno_name,
-                                                    pres_anno_name,
-                                                    query_anno_name])
+        ref_img, ref_mask = self._load_frame(support_anno_name)
+        inter_img, inter_mask = self._load_frame(pres_anno_name)
+        query_img, query_mask = self._load_frame(query_anno_name)
 
+        if self.is_train:
+            ref_mask, inter_mask, query_mask = self._filter(
+                [ref_mask, inter_mask, query_mask])
+
+        return (ref_img, ref_mask, inter_img, query_img, nobjects), (inter_mask, query_mask)
+
+        '''
         support_img, pres_img, query_img = \
             map(self.im2tensor, [support_img_name,
                                  pres_img_name,
                                  query_img_name])
-        
+
         support_anno, pres_anno, query_anno = \
             map(self.mask2tensor, [support_anno_name,
                                    pres_anno_name,
@@ -458,20 +474,24 @@ class DAVISTripletRandomDataset(DAVISCoreDataset):
 
         if self.is_train:
             cropper = RandomCrop(384)
-            support_img, support_anno = self.random_crop(support_img, support_anno, cropper)
-            pres_img, pres_anno = self.random_crop(pres_img, pres_anno, cropper)
-            query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
+            support_img, support_anno = self.random_crop(
+                support_img, support_anno, cropper)
+            pres_img, pres_anno = self.random_crop(
+                pres_img, pres_anno, cropper)
+            query_img, query_anno = self.random_crop(
+                query_img, query_anno, cropper)
 
             query_objs = set(np.unique(query_anno))
             support_objs = set(np.unique(support_anno))
             pres_objs = set(np.unique(pres_anno))
             excess_objs = len(query_objs.difference(support_objs)) + \
-                          len(query_objs.difference(pres_objs)) + \
-                          len(pres_objs.difference(support_objs))
+                len(query_objs.difference(pres_objs)) + \
+                len(pres_objs.difference(support_objs))
             if excess_objs:
                 return self.__getitem__(inx)
 
         return (support_img, support_anno, pres_img, query_img, nobjects), (pres_anno, query_anno)
+        '''
 
     def __len__(self):
         return len(self.video_names)

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 
 from datasets.davis import *
 from datasets.coco import *
+from utils.random_seed import set_seed
 
 import argparse
 
@@ -48,13 +49,16 @@ def visualize_triplet(dataset):
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
     for idx, batch in enumerate(dataloader):
         for a_img, a_anno, b_img, c_img, nobjects, b_anno, c_anno in zip(*batch[0], *batch[1]):
-            fig, ax = plt.subplots(3, 2)
-            ax[0, 0].imshow(a_img.permute(1, 2, 0))
-            ax[0, 1].imshow(a_anno.squeeze())
-            ax[1, 0].imshow(b_img.permute(1, 2, 0))
-            ax[1, 1].imshow(b_anno.squeeze())
-            ax[2, 0].imshow(c_img.permute(1, 2, 0))
-            ax[2, 1].imshow(c_anno.squeeze())
+            fig, ax = plt.subplots(3, 1)
+            ax[0].imshow(a_img.permute(1, 2, 0))
+            ax[0].imshow(a_anno.squeeze(),
+                         vmin=0, vmax=nobjects, alpha=0.5)
+            ax[1].imshow(b_img.permute(1, 2, 0))
+            ax[1].imshow(b_anno.squeeze(),
+                         vmin=0, vmax=nobjects, alpha=0.5)
+            ax[2].imshow(c_img.permute(1, 2, 0))
+            ax[2].imshow(c_anno.squeeze(),
+                         vmin=0, vmax=nobjects, alpha=0.5)
 
             fig.tight_layout()
             plt.show()
@@ -109,6 +113,22 @@ def test_davis_triplet():
     visualize_triplet(dataset)
 
 
+def test_davis_random_triplet():
+    parser = get_argparser()
+    args = parser.parse_args()
+
+    dataset = DAVISTripletRandomDataset(root_path=args.root,
+                                        annotation_folder=args.anno,
+                                        jpeg_folder=args.jpeg,
+                                        resolution=args.res,
+                                        imageset_folder=args.imgset,
+                                        year=args.year,
+                                        phase=args.phase,
+                                        mode=args.mode)
+
+    visualize_triplet(dataset)
+
+
 def test_synthetic_triplet():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', help='Path to the COCO dataset')
@@ -124,9 +144,10 @@ def test_synthetic_triplet():
                        ann_folder=args.ann, img_folder=args.img)
     dataset = SyntheticTripletDataset(coco, 10)
 
-    #visualize_triplet(dataset)
+    visualize_triplet(dataset)
 
 
 if __name__ == "__main__":
-    #test_davis_random_pair()
-    test_synthetic_triplet()
+    set_seed(3698)
+    test_davis_random_triplet()
+    # test_synthetic_triplet()
