@@ -15,6 +15,8 @@ from transforms.crop import MultiRandomCrop
 from transforms.affine import MultiRandomAffine
 from transforms.resize import MultiRandomResize
 
+from utils import getter
+
 class COCODataset(data.Dataset):
     def __init__(self, 
                 root_path=None,
@@ -70,11 +72,13 @@ class COCODataset(data.Dataset):
 
 class SyntheticTripletDataset:
     def __init__(self, dataset, niters):
-        self.dataset = dataset
+        self.dataset = getter.get_instance(dataset)
         self.niters = niters
 
     def _augmentation(self, img, mask):
-        img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        #img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        img = tvtf.Resize(384)(img)
+        mask = tvtf.Resize(384, 0)(mask)
         img, mask = MultiRandomCrop(size=384)((img, mask))
         img, mask = MultiRandomAffine(degrees=(-20, 20),
                                       scale=(0.9, 1.1),
@@ -111,10 +115,12 @@ class SyntheticTripletDataset:
         ims, masks = zip(*[self._augmentation(ori_img, ori_mask) 
                            for _ in range(3)])
         im_0, im_1, im_2 = map(tvtf.ToTensor(), ims)
-        mask2tensor = lambda x: torch.tensor(np.array(x))
+        mask2tensor = lambda x: torch.LongTensor(np.array(x))
         masks = list(map(mask2tensor, masks))
         mask_0, mask_1, mask_2 = self._filter(masks)
         nobjects = mask_0.max()
+        if nobjects == 0:
+            return self.__getitem__(i)
         return (im_0, mask_0, im_1, im_2, nobjects), (mask_1, mask_2)
     
     def __len__(self):
