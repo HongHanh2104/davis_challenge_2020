@@ -18,8 +18,9 @@ from transforms.resize import MultiRandomResize
 class COCODataset(data.Dataset):
     def __init__(self, 
                 root_path=None,
-                data_type='val2017',
-                ann_folder='annotations'):
+                data_type='train2017',
+                ann_folder='annotations',
+                img_folder='train2017'):
         super().__init__()
 
         assert root_path is not None, "Missing Missing root path, should be a path COCO dataset!"
@@ -28,6 +29,8 @@ class COCODataset(data.Dataset):
         
         file_json = 'instances_{}.json'.format(data_type)
         annfiles_path = self.root_path / ann_folder / file_json
+
+        self.img_folder = self.root_path / img_folder
 
         # initialize COCO api for instance annotations
         self.coco = COCO(annfiles_path)
@@ -46,9 +49,10 @@ class COCODataset(data.Dataset):
         imgId = self.imgIds[inx]
         imgId = self.coco.loadImgs(imgId)[0]
 
-        response = requests.get(imgId['coco_url'])
-        img_bytes = io.BytesIO(response.content)
-        img = Image.open(img_bytes).convert('RGB')
+        #response = requests.get(imgId['coco_url'])
+        #img_bytes = io.BytesIO(response.content)
+        path = self.img_folder / imgId['file_name']
+        img = Image.open(path).convert('RGB')
         # Get all annotations of this image
         annIds = self.coco.getAnnIds(imgIds=imgId['id'], iscrowd=False)
         

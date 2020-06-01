@@ -30,12 +30,14 @@ def get_argparser():
 def visualize_pair(dataset):
     dataloader = DataLoader(dataset, batch_size=1)
     for idx, batch in enumerate(dataloader):
-        for support_img, support_anno, query_img, query_anno in zip(*batch[0], batch[1]):
-            fig, ax = plt.subplots(2, 2)
-            ax[0, 0].imshow(support_img.permute(1, 2, 0))
-            ax[0, 1].imshow(support_anno.squeeze())
-            ax[1, 0].imshow(query_img.permute(1, 2, 0))
-            ax[1, 1].imshow(query_anno.squeeze())
+        for support_img, support_anno, query_img, nobjects, query_anno in zip(*batch[0], batch[1]):
+            fig, ax = plt.subplots(2, 1)
+            ax[0].imshow(support_img.permute(1, 2, 0))
+            ax[0].imshow(support_anno.squeeze(),
+                         vmin=0, vmax=nobjects, alpha=0.5)
+            ax[1].imshow(query_img.permute(1, 2, 0))
+            ax[1].imshow(query_anno.squeeze(),
+                         vmin=0, vmax=nobjects, alpha=0.5)
 
             fig.tight_layout()
             plt.show()
@@ -106,20 +108,25 @@ def test_davis_triplet():
 
     visualize_triplet(dataset)
 
+
 def test_synthetic_triplet():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', help='Path to the COCO dataset')
     parser.add_argument('--ann', help='The annotation subfolder (of ROOT)',
                         default='annotations')
+    parser.add_argument('--img', help='The image subfolder (of ROOT)',
+                        default='train2017')
     parser.add_argument('--data_type', help='train_[year] or val_[year]',
-                        default='val2017')
+                        default='train2017')
 
     args = parser.parse_args()
-    coco = COCODataset(root_path=args.root, data_type=args.data_type, 
-                ann_folder=args.ann)
-    dataset = SyntheticTripletDataset(coco)
+    coco = COCODataset(root_path=args.root, data_type=args.data_type,
+                       ann_folder=args.ann, img_folder=args.img)
+    dataset = SyntheticTripletDataset(coco, 10)
 
-    visualize_triplet(dataset)
+    #visualize_triplet(dataset)
+
 
 if __name__ == "__main__":
+    #test_davis_random_pair()
     test_synthetic_triplet()
