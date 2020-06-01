@@ -64,11 +64,20 @@ class DAVISCoreDataset(data.Dataset):
 
                 self.infos[folder.name] = dict()
 
-                frames = sorted(os.listdir(str(folder)))
-                nobjects = 0
-                for x in folder.iterdir():
-                    anno_im = Image.open(str(x)).convert('P')
-                    nobjects = max(nobjects, np.max(anno_im))
+                # YoutubeVOS provides a meta.json file
+                if os.path.exists(str(self.root_path / 'meta.json')):
+                    json_data = json.load(open(str(self.root_path / 'meta.json')))
+                    nobjects = len(json_data['videos'][video_id]['objects'])
+                    for x in folder.iterdir():
+                        anno_im = Image.open(str(x)).convert('P')
+                        break
+                # DAVIS does not, load all files just in case
+                else:
+                    frames = sorted(os.listdir(str(folder)))
+                    nobjects = 0
+                    for x in folder.iterdir():
+                        anno_im = Image.open(str(x)).convert('P')
+                        nobjects = max(nobjects, np.max(anno_im))
                 self.infos[folder.name]['nobjects'] = nobjects
                 self.infos[folder.name]['size'] = anno_im.size
 
