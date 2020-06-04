@@ -29,9 +29,9 @@ model = model.module
 dataset = DAVISTripletDataset(root_path='data/DAVIS-trainval',
                               resolution='480p',
                               phase='train',
-                              mode=0,
+                              mode=4,
                               is_train=False)
-dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+dataloader = DataLoader(dataset, batch_size=1)
 
 # Metric
 
@@ -50,13 +50,19 @@ def iou(output, target, nclasses, eps=1e-9):
 
     return ious.mean()
 
-
+f = open('train.csv', 'w')
 with torch.no_grad():
     for idx, (inp, out) in enumerate(tqdm(dataloader)):
-        a_img, a_anno, b_img, c_img, nobjects = move_to(
+        a_img, a_anno, b_img, c_img, infos = move_to(
             inp, torch.device('cuda:0'))
         b_anno, c_anno = move_to(out, torch.device('cuda:0'))
+        
+        a_id, b_id, c_id = infos['frames']
+        a_id = a_id[0]
+        b_id = b_id[0]
+        c_id = c_id[0]
 
+        nobjects = infos['nobjects'].item()
         num_objects = torch.LongTensor([[nobjects]])
 
         # Memorize a
@@ -65,7 +71,7 @@ with torch.no_grad():
 
         # Without using intermediate frame
         logit = model.segment(c_img, k, v, num_objects)
-        print(iou(logit, c_anno, 1+nobjects.item()))
+        iou_1 = iou(logit, c_anno, 1 + nobjects).item()
 
         # Using intermediate frame
         # Segment b
@@ -78,7 +84,9 @@ with torch.no_grad():
         v = torch.cat([v, b_v], dim=3)
 
         logit = model.segment(c_img, k, v, num_objects)
-        print(iou(logit, c_anno, 1+nobjects.item()))
+        iou_2 = iou(logit, c_anno, 1 + nobjects).item()
+
+        f.write(','.join([a_id, b_id, c_id, str(iou_1), str(iou_2)]) + '\n')
 
         # fig, ax = plt.subplots(3, 1)
         # ax[0].imshow(a_img[0].permute(1, 2, 0))
@@ -94,3 +102,4 @@ with torch.no_grad():
         # fig.tight_layout()
         # plt.show()
         # plt.close()
+f.close()

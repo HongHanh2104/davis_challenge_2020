@@ -81,8 +81,9 @@ class DAVISCoreDataset(data.Dataset):
                         anno_im = Image.open(str(x)).convert('P')
                         nobjects = max(nobjects, np.max(anno_im))
                         break
+                self.infos[folder.name]['name'] = folder.name
                 self.infos[folder.name]['nobjects'] = nobjects
-                self.infos[folder.name]['size'] = anno_im.size
+                self.infos[folder.name]['size'] = torch.tensor(anno_im.size)
 
                 jpeg_path = self.root_path / jpeg_folder / resolution / folder.name
                 self.infos[folder.name]['length'] = len(
@@ -253,7 +254,7 @@ class DAVISTripletDataset(DAVISCoreDataset):
                 pres_anno = video_name + "/" + pair[1]
                 query_anno = video_name + "/" + pair[2]
                 self.frame_list.append(
-                    (support_anno, pres_anno, query_anno, nobjects))
+                    (support_anno, pres_anno, query_anno, self.infos[video_name]))
 
     def get_frame(self, mode, video_name):
         images = sorted(os.listdir(str(self.annotation_path / video_name)))
@@ -281,6 +282,11 @@ class DAVISTripletDataset(DAVISCoreDataset):
                              self.max_npairs if self.max_npairs != -1 else len(indices))
             indices = random.sample(indices, k=max_npairs)
             return [(images[i], images[j], images[k]) for i, j, k in indices]
+        elif mode == 4:
+            return [(images[0], images[i], images[j])
+                     for i in range(1, n)
+                     for j in range(i, n)
+                     if min_skip <= i <= max_skip and min_skip <= j - i <= max_skip]
         else:
             raise Exception('Unknown mode')
 
@@ -289,7 +295,9 @@ class DAVISTripletDataset(DAVISCoreDataset):
         return im[..., r0:r1, c0:c1], mask[..., r0:r1, c0:c1]
 
     def __getitem__(self, inx):
-        support_anno_name, pres_anno_name, query_anno_name, nobjects = self.frame_list[inx]
+        support_anno_name, pres_anno_name, query_anno_name, infos = self.frame_list[inx]
+        infos['frames'] = [support_anno_name, pres_anno_name, query_anno_name]
+
         support_img_name, pres_img_name, query_img_name = \
             map(lambda x: x.replace('png', 'jpg'), [support_anno_name,
                                                     pres_anno_name,
@@ -314,7 +322,7 @@ class DAVISTripletDataset(DAVISCoreDataset):
             query_img, query_anno = self.random_crop(
                 query_img, query_anno, cropper)
 
-        return (support_img, support_anno, pres_img, query_img, nobjects), (pres_anno, query_anno)
+        return (support_img, support_anno, pres_img, query_img, infos), (pres_anno, query_anno)
 
     def __len__(self):
         return len(self.frame_list)
