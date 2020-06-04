@@ -49,7 +49,8 @@ class DAVISCoreDataset(data.Dataset):
         self.annotation_path = self.root_path / annotation_folder / resolution
 
         # Load video name prefixes (ex: bear for bear_1)
-        txt_path = self.root_path / imageset_folder / str(year) / f"{phase}.txt"
+        txt_path = \
+            self.root_path / imageset_folder / str(year) / f"{phase}.txt"
         with open(txt_path) as files:
             video_name_prefixes = [filename.strip() for filename in files]
 
@@ -76,9 +77,10 @@ class DAVISCoreDataset(data.Dataset):
                 # Others might not, load all files just in case
                 else:
                     nobjects = 0
-                    for x in folder.iterdir():
+                    for x in sorted(folder.iterdir()):
                         anno_im = Image.open(str(x)).convert('P')
                         nobjects = max(nobjects, np.max(anno_im))
+                        break
                 self.infos[folder.name]['nobjects'] = nobjects
                 self.infos[folder.name]['size'] = anno_im.size
 
@@ -261,9 +263,11 @@ class DAVISTripletDataset(DAVISCoreDataset):
                        self.max_skip if self.max_skip != -1 else n - 1)
 
         if mode == 0:
-            return [(images[i], images[i + k - 1], images[i + k])
-                    for k in range(1 + min_skip, max_skip)
-                    for i in range(n - k)]
+            return [(images[i], images[j], images[k])
+                    for i in range(0, n)
+                    for j in range(i+1, n)
+                    for k in range(j+1, n)
+                    if min_skip <= j - i <= max_skip and min_skip <= k - j <= max_skip]
         elif mode == 1:
             return [(images[0], images[k - 1], images[k])
                     for k in range(1 + min_skip, max_skip + 1)]

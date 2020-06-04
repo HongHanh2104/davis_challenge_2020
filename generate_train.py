@@ -9,6 +9,10 @@ import numpy as np
 from models.stm import STM
 from datasets.davis import DAVISTripletDataset
 from utils.device import move_to
+from utils.random_seed import set_seed, set_determinism
+
+set_seed(3698)
+set_determinism()
 
 # Load model
 model = nn.DataParallel(STM())
@@ -24,10 +28,10 @@ model = model.module
 # Load dataset
 dataset = DAVISTripletDataset(root_path='data/DAVIS-trainval',
                               resolution='480p',
-                              phase='debug',
+                              phase='train',
                               mode=0,
                               is_train=False)
-dataloader = DataLoader(dataset, batch_size=1)
+dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
 
 # Metric
 
@@ -42,49 +46,51 @@ def iou(output, target, nclasses, eps=1e-9):
     intersection = (prediction & target).sum((-3, -2))
     union = (prediction | target).sum((-3, -2))
     ious = (intersection.float() + eps) / (union.float() + eps)
+    # ious = ious[:, 1:]
 
     return ious.mean()
 
 
-for idx, (inp, out) in enumerate(tqdm(dataloader)):
-    a_img, a_anno, b_img, c_img, nobjects = move_to(
-        inp, torch.device('cuda:0'))
-    b_anno, c_anno = move_to(out, torch.device('cuda:0'))
+with torch.no_grad():
+    for idx, (inp, out) in enumerate(tqdm(dataloader)):
+        a_img, a_anno, b_img, c_img, nobjects = move_to(
+            inp, torch.device('cuda:0'))
+        b_anno, c_anno = move_to(out, torch.device('cuda:0'))
 
-    num_objects = torch.LongTensor([[nobjects]])
+        num_objects = torch.LongTensor([[nobjects]])
 
-    # Memorize a
-    a_seg = F.one_hot(a_anno, 11).permute(0, 3, 1, 2)
-    k, v = model.memorize(a_img, a_seg, num_objects)
+        # Memorize a
+        a_seg = F.one_hot(a_anno, 11).permute(0, 3, 1, 2)
+        k, v = model.memorize(a_img, a_seg, num_objects)
 
-    # Without using intermediate frame
-    logit = model.segment(c_img, k, v, num_objects)
-    print(iou(logit, c_anno, 1+nobjects.item()))
+        # Without using intermediate frame
+        logit = model.segment(c_img, k, v, num_objects)
+        print(iou(logit, c_anno, 1+nobjects.item()))
 
-    # Using intermediate frame
-    # Segment b
-    b_logit = model.segment(b_img, k, v, num_objects)
-    # Memorize b
-    b_pred = F.softmax(b_logit, dim=1)
-    #b_im = self.stn(b_im, b_pred)
-    b_k, b_v = model.memorize(b_img, b_pred, num_objects)
-    k = torch.cat([k, b_k], dim=3)
-    v = torch.cat([v, b_v], dim=3)
+        # Using intermediate frame
+        # Segment b
+        b_logit = model.segment(b_img, k, v, num_objects)
+        # Memorize b
+        b_pred = F.softmax(b_logit, dim=1)
+        #b_im = self.stn(b_im, b_pred)
+        b_k, b_v = model.memorize(b_img, b_pred, num_objects)
+        k = torch.cat([k, b_k], dim=3)
+        v = torch.cat([v, b_v], dim=3)
 
-    logit = model.segment(c_img, k, v, num_objects)
-    print(iou(logit, c_anno, 1+nobjects.item()))
+        logit = model.segment(c_img, k, v, num_objects)
+        print(iou(logit, c_anno, 1+nobjects.item()))
 
-    # fig, ax = plt.subplots(3, 1)
-    # ax[0].imshow(a_img[0].permute(1, 2, 0))
-    # ax[0].imshow(a_anno[0].squeeze(0),
-    #              vmin=0, vmax=nobjects, alpha=0.5)
-    # ax[1].imshow(b_img[0].permute(1, 2, 0))
-    # ax[1].imshow(b_anno[0].squeeze(0),
-    #              vmin=0, vmax=nobjects, alpha=0.5)
-    # ax[2].imshow(c_img[0].permute(1, 2, 0))
-    # ax[2].imshow(c_anno[0].squeeze(0),
-    #              vmin=0, vmax=nobjects, alpha=0.5)
+        # fig, ax = plt.subplots(3, 1)
+        # ax[0].imshow(a_img[0].permute(1, 2, 0))
+        # ax[0].imshow(a_anno[0].squeeze(0),
+        #              vmin=0, vmax=nobjects, alpha=0.5)
+        # ax[1].imshow(b_img[0].permute(1, 2, 0))
+        # ax[1].imshow(b_anno[0].squeeze(0),
+        #              vmin=0, vmax=nobjects, alpha=0.5)
+        # ax[2].imshow(c_img[0].permute(1, 2, 0))
+        # ax[2].imshow(c_anno[0].squeeze(0),
+        #              vmin=0, vmax=nobjects, alpha=0.5)
 
-    # fig.tight_layout()
-    # plt.show()
-    # plt.close()
+        # fig.tight_layout()
+        # plt.show()
+        # plt.close()
