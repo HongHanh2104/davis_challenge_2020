@@ -32,76 +32,91 @@ class DAVISCoreDataset(data.Dataset):
                  is_train=True,
                  mode=0,
                  min_skip=1,
-                 max_skip=-1,
-                 max_npairs=-1):
+                 max_skip=-1):
         super().__init__()
 
         # Root directory
         assert root_path is not None, "Missing root path, should be a path DAVIS dataset!"
         self.root_path = Path(root_path)
 
-        self.annotation = annotation_folder
-        self.jpeg = jpeg_folder
+        self.annotation_folder = annotation_folder
+        self.jpeg_folder = jpeg_folder
+        self.imageset_folder = imageset_folder
+        self.resolution = resolution
 
         self.is_train = is_train
 
+        self.mode = mode
+        self.min_skip = min_skip
+        self.max_skip = max_skip
+
         # Path to Annotations
-        self.annotation_path = self.root_path / annotation_folder / resolution
+        self.annotation_path = self.root_path / self.annotation_folder / self.resolution
 
         # Load video name prefixes (ex: bear for bear_1)
         txt_path = \
-            self.root_path / imageset_folder / str(year) / f"{phase}.txt"
+            self.root_path / self.imageset_folder / str(year) / f"{phase}.txt"
         with open(txt_path) as files:
             video_name_prefixes = [filename.strip() for filename in files]
 
         # Load only the names that has prefix in video_name_prefixes
-        self.video_names = []
-        self.infos = dict()
+        self.video_names = [folder.name
+                            for folder in self.annotation_path.iterdir()
+                            if folder.name.split('_')[0] in video_name_prefixes]
 
-        print('Loading data...')
-        for folder in tqdm(self.annotation_path.iterdir()):
-            video_id = folder.name.split('_')[0]
-            if video_id in video_name_prefixes:
-                self.video_names.append(folder.name)
+        # Load video infos
+        self.infos = self._load_videos_info(self.video_names)
 
-                self.infos[folder.name] = dict()
+    def _load_videos_info(self, video_names):
+        infos = {}
+        for video_name in video_names:
+            folder = self.annotation_path / video_name
+            video_id = video_name.split('_')[0]
 
-                # YoutubeVOS provides a meta.json file
-                if os.path.exists(str(self.root_path / 'meta.json')):
-                    json_data = json.load(
-                        open(str(self.root_path / 'meta.json')))
-                    nobjects = len(json_data['videos'][video_id]['objects'])
-                    for x in folder.iterdir():
-                        anno_im = Image.open(str(x)).convert('P')
-                        break
-                # Others might not, load all files just in case
-                else:
-                    nobjects = 0
-                    for x in sorted(folder.iterdir()):
-                        anno_im = Image.open(str(x)).convert('P')
-                        nobjects = max(nobjects, np.max(anno_im))
-                        break
-                self.infos[folder.name]['name'] = folder.name
-                self.infos[folder.name]['nobjects'] = nobjects
-                self.infos[folder.name]['size'] = torch.tensor(anno_im.size)
+            info = dict()
+            info['name'] = folder.name
 
-                jpeg_path = self.root_path / jpeg_folder / resolution / folder.name
-                self.infos[folder.name]['length'] = len(
-                    list(jpeg_path.iterdir()))
+            # Get video length
+            jpeg_path = self.root_path / self.jpeg_folder / self.resolution / video_name
+            info['length'] = len(list(jpeg_path.iterdir()))
 
-    def _load_frame(self, img_name):
+            # Get total number of objects
+            # YoutubeVOS provides a meta.json file
+            if os.path.exists(str(self.root_path / 'meta.json')):
+                json_data = json.load(
+                    open(str(self.root_path / 'meta.json')))
+                nobjects = len(json_data['videos'][video_id]['objects'])
+                for x in folder.iterdir():
+                    anno_im = Image.open(str(x)).convert('P')
+                    break
+            # Others might not, load all files just in case
+            else:
+                nobjects = 0
+                for x in sorted(folder.iterdir()):
+                    anno_im = Image.open(str(x)).convert('P')
+                    nobjects = max(nobjects, np.max(anno_im))
+                    break
+            info['nobjects'] = nobjects
+
+            # Get image size (same for all frames)
+            info['size'] = torch.tensor(anno_im.size)
+
+            infos[video_name] = info
+        return infos
+
+    def _load_frame(self, img_name, augmentation):
         # Load annotated mask
         anno_path = str(self.annotation_path / img_name)
         mask = Image.open(anno_path).convert('P')
 
         # Load frame image
-        jpeg_path = anno_path.replace(self.annotation, self.jpeg)
+        jpeg_path = anno_path.replace(self.annotation_folder, self.jpeg_folder)
         jpeg_path = jpeg_path.replace('.png', '.jpg')
         img = Image.open(jpeg_path).convert('RGB')
 
         # Augmentation (if train)
         if self.is_train:
-            img, mask = self._augmentation(img, mask)
+            img, mask = augmentation(img, mask)
 
         # Convert to tensor
         img = tvtf.ToTensor()(img)
@@ -111,7 +126,7 @@ class DAVISCoreDataset(data.Dataset):
 
     def im2tensor(self, img_name):
         anno_path = str(self.annotation_path / img_name)
-        jpeg_path = anno_path.replace(self.annotation, self.jpeg)
+        jpeg_path = anno_path.replace(self.annotation_path, self.jpeg_path)
         img = Image.open(jpeg_path).convert('RGB')
 
         tfs = []
@@ -133,16 +148,6 @@ class DAVISCoreDataset(data.Dataset):
         ret = torch.LongTensor(np.array(anno_tf(anno)))
         ret[ret > 10] = 0
         return ret
-
-    def _augmentation(self, img, mask):
-        # img, mask = MultiRandomResize(resize_value=384)((img, mask))
-        img = tvtf.Resize(384)(img)
-        mask = tvtf.Resize(384, 0)(mask)
-        img, mask = MultiRandomCrop(size=384)((img, mask))
-        img, mask = MultiRandomAffine(degrees=(-15, 15),
-                                      scale=(0.95, 1.05),
-                                      shear=(-10, 10))((img, mask))
-        return img, mask
 
     def _filter_small_objs(self, mask, thres):
         # Filter small objects
@@ -170,23 +175,16 @@ class DAVISCoreDataset(data.Dataset):
 
 
 class DAVISPairDataset(DAVISCoreDataset):
-    def __init__(self,
-                 mode=0,
-                 min_skip=1,
-                 max_skip=-1,
-                 max_npairs=-1,
-                 **kwargs):
+    def __init__(self, max_npairs=-1, **kwargs):
         super().__init__(**kwargs)
 
-        self.min_skip = min_skip
-        self.max_skip = max_skip
         self.max_npairs = max_npairs
 
         # Generate frames
         self.frame_list = []
         for video_name in self.video_names:
             nobjects = self.infos[video_name]['nobjects']
-            png_pair = self.get_frame(mode, video_name)
+            png_pair = self.get_frame(self.mode, video_name)
             for pair in png_pair:
                 support_anno = video_name + "/" + pair[0]
                 query_anno = video_name + "/" + pair[1]
@@ -212,42 +210,43 @@ class DAVISPairDataset(DAVISCoreDataset):
         else:
             raise Exception('Unknown mode')
 
+    def _augmentation(self, img, mask):
+        # img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        img = tvtf.Resize(384)(img)
+        mask = tvtf.Resize(384, 0)(mask)
+        img, mask = MultiRandomCrop(size=384)((img, mask))
+        img, mask = MultiRandomAffine(degrees=(-15, 15),
+                                      scale=(0.95, 1.05),
+                                      shear=(-10, 10))((img, mask))
+        return img, mask
+
     def __getitem__(self, inx):
-        nobjects = self.frame_list[inx][2]
-        support_anno_name = self.frame_list[inx][0]
-        support_img_name = support_anno_name.replace(".png", ".jpg")
-        query_anno_name = self.frame_list[inx][1]
-        query_img_name = query_anno_name.replace(".png", ".jpg")
+        support_anno_name, query_anno_name, nobjects = self.frame_list[inx]
 
-        support_img = self.im2tensor(support_img_name)
-        query_img = self.im2tensor(query_img_name)
+        ref_img, ref_mask = self._load_frame(support_anno_name,
+                                             self._augmentation)
+        query_img, query_mask = self._load_frame(query_anno_name,
+                                                 self._augmentation)
 
-        support_anno = self.mask2tensor(support_anno_name)
-        query_anno = self.mask2tensor(query_anno_name)
+        if self.is_train:
+            ref_mask, query_mask = self._filter([ref_mask, query_mask])
 
-        return (support_img, support_anno, query_img, nobjects), (query_anno,)
+        return (ref_img, ref_mask, query_img, nobjects), (query_mask,)
 
     def __len__(self):
         return len(self.frame_list)
 
 
 class DAVISTripletDataset(DAVISCoreDataset):
-    def __init__(self,
-                 mode=0,
-                 min_skip=1,
-                 max_skip=-1,
-                 max_npairs=-1,
-                 **kwargs):
+    def __init__(self, max_npairs=-1, **kwargs):
         super().__init__(**kwargs)
 
-        self.min_skip = min_skip
-        self.max_skip = max_skip
         self.max_npairs = max_npairs
 
         # Generate frames
         self.frame_list = []
         for video_name in self.video_names:
-            png_pair = self.get_frame(mode, video_name)
+            png_pair = self.get_frame(self.mode, video_name)
             nobjects = self.infos[video_name]['nobjects']
             for pair in png_pair:
                 support_anno = video_name + "/" + pair[0]
@@ -284,9 +283,9 @@ class DAVISTripletDataset(DAVISCoreDataset):
             return [(images[i], images[j], images[k]) for i, j, k in indices]
         elif mode == 4:
             return [(images[0], images[i], images[j])
-                     for i in range(1, n)
-                     for j in range(i, n)
-                     if min_skip <= i <= max_skip and min_skip <= j - i <= max_skip]
+                    for i in range(1, n)
+                    for j in range(i, n)
+                    if min_skip <= i <= max_skip and min_skip <= j - i <= max_skip]
         else:
             raise Exception('Unknown mode')
 
@@ -329,19 +328,11 @@ class DAVISTripletDataset(DAVISCoreDataset):
 
 
 class DAVISPairRandomDataset(DAVISCoreDataset):
-    def __init__(self,
-                 mode=0,
-                 min_skip=1,
-                 max_skip=-1,
-                 max_npairs=1,
-                 **kwargs):
+    def __init__(self, n=1, **kwargs):
         super().__init__(**kwargs)
 
-        self.mode = mode
-        self.min_skip = min_skip
-        self.max_skip = max_skip
-
-        self.video_names = self.video_names * max_npairs
+        self.n = n
+        self.video_names = self.video_names * self.n
 
     def get_frame(self, mode, video_name):
         images = sorted(os.listdir(str(self.annotation_path / video_name)))
@@ -365,6 +356,16 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
         r0, c0, r1, c1 = cropper(im)
         return im[..., r0:r1, c0:c1], mask[..., r0:r1, c0:c1]
 
+    def _augmentation(self, img, mask):
+        # img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        img = tvtf.Resize(384)(img)
+        mask = tvtf.Resize(384, 0)(mask)
+        img, mask = MultiRandomCrop(size=384)((img, mask))
+        img, mask = MultiRandomAffine(degrees=(-15, 15),
+                                      scale=(0.95, 1.05),
+                                      shear=(-10, 10))((img, mask))
+        return img, mask
+
     def __getitem__(self, inx):
         video_name = self.video_names[inx]
         nobjects = self.infos[video_name]['nobjects']
@@ -374,13 +375,13 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
         support_anno_name = video_name + '/' + support_anno_name
         query_anno_name = video_name + '/' + query_anno_name
 
-        ref_img, ref_mask = self._load_frame(support_anno_name)
-        query_img, query_mask = self._load_frame(query_anno_name)
+        ref_img, ref_mask = self._load_frame(support_anno_name,
+                                             self._augmentation)
+        query_img, query_mask = self._load_frame(query_anno_name,
+                                                 self._augmentation)
 
         if self.is_train:
             ref_mask, query_mask = self._filter([ref_mask, query_mask])
-            # if len(np.unique(ref_mask)) == 0:
-            #    return self.__getitem__(inx)
 
         return (ref_img, ref_mask, query_img, nobjects), (query_mask,)
 
@@ -415,19 +416,11 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
 
 
 class DAVISTripletRandomDataset(DAVISCoreDataset):
-    def __init__(self,
-                 mode=0,
-                 min_skip=1,
-                 max_skip=-1,
-                 max_npairs=1,
-                 **kwargs):
+    def __init__(self, n=1, **kwargs):
         super().__init__(**kwargs)
 
-        self.mode = mode
-        self.min_skip = min_skip
-        self.max_skip = max_skip
-
-        self.video_names = self.video_names * max_npairs
+        self.n = n
+        self.video_names = self.video_names * self.n
 
     def get_frame(self, mode, video_name):
         images = sorted(os.listdir(str(self.annotation_path / video_name)))
@@ -453,6 +446,16 @@ class DAVISTripletRandomDataset(DAVISCoreDataset):
         r0, c0, r1, c1 = cropper(im)
         return im[..., r0:r1, c0:c1], mask[..., r0:r1, c0:c1]
 
+    def _augmentation(self, img, mask):
+        img = tvtf.Resize(480)(img)
+        mask = tvtf.Resize(480, 0)(mask)
+        img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        img, mask = MultiRandomCrop(size=384)((img, mask))
+        img, mask = MultiRandomAffine(degrees=(-15, 15),
+                                      scale=(0.95, 1.05),
+                                      shear=(-10, 10))((img, mask))
+        return img, mask
+
     def __getitem__(self, inx):
         video_name = self.video_names[inx]
         nobjects = self.infos[video_name]['nobjects']
@@ -463,13 +466,16 @@ class DAVISTripletRandomDataset(DAVISCoreDataset):
         pres_anno_name = video_name + '/' + pres_anno_name
         query_anno_name = video_name + '/' + query_anno_name
 
-        ref_img, ref_mask = self._load_frame(support_anno_name)
-        inter_img, inter_mask = self._load_frame(pres_anno_name)
-        query_img, query_mask = self._load_frame(query_anno_name)
+        ref_img, ref_mask = self._load_frame(support_anno_name,
+                                             self._augmentation)
+        inter_img, inter_mask = self._load_frame(pres_anno_name,
+                                                 self._augmentation)
+        query_img, query_mask = self._load_frame(query_anno_name,
+                                                 self._augmentation)
 
         if self.is_train:
-            ref_mask, inter_mask, query_mask = self._filter(
-                [ref_mask, inter_mask, query_mask])
+            ref_mask, inter_mask, query_mask = \
+                self._filter([ref_mask, inter_mask, query_mask])
 
         return (ref_img, ref_mask, inter_img, query_img, nobjects), (inter_mask, query_mask)
 
