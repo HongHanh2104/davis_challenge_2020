@@ -1,8 +1,7 @@
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
-from datasets.davis import *
-from datasets.coco import *
+from datasets import *
 from utils.random_seed import set_seed
 
 import argparse
@@ -140,14 +139,20 @@ def test_synthetic_triplet():
                         default='train2017')
 
     args = parser.parse_args()
-    coco = COCODataset(root_path=args.root, data_type=args.data_type,
-                       ann_folder=args.ann, img_folder=args.img)
-    dataset = SyntheticTripletDataset(coco, 10)
+    dataset = SyntheticDataset({
+        'name': 'COCODataset',
+        'args': {
+            'root_path': args.root,
+            'data_type': args.data_type,
+            'ann_folder': args.ann,
+            'img_folder': args.img,
+        },
+    }, 10)
 
-    visualize_triplet(dataset)
+    visualize_pair(dataset)
 
 
 if __name__ == "__main__":
     set_seed(3698)
-    test_davis_random_triplet()
-    # test_synthetic_triplet()
+    # test_davis_random_triplet()
+    test_synthetic_triplet()

@@ -1,3 +1,3 @@
 from .davis import DAVISPairDataset, DAVISTripletDataset, DAVISPairRandomDataset, DAVISTripletRandomDataset
-from .coco import SyntheticTripletDataset, COCODataset
-
+from .coco import COCODataset
+from .synthetic import SyntheticDataset

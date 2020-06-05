@@ -7,7 +7,7 @@ model:
 optimizer:
     name: Adam
     args:
-        lr: 0.0001
+        lr: 0.00001
 loss:
     name: MultiCELoss
 metric:
@@ -23,13 +23,17 @@ scheduler:
         verbose: True
 dataset:
     train:
-        name: SyntheticTripletDataset
+        name: SyntheticDataset
         args:
             dataset:
                 name: COCODataset
                 args:
                     root_path: data/COCO
+                    ann_folder: annotations
+                    data_type: train2017
+                    img_folder: train2017
             niters: 3500
+            nimgs: 3
         loader:
             name: DataLoader
             args:
@@ -43,7 +47,6 @@ dataset:
             phase: val
             mode: 1
             is_train: False
-            #max_npairs: 1
         loader:
             name: DataLoader
             args:
