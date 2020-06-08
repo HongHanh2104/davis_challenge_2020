@@ -69,7 +69,10 @@ class DAVISCoreDataset(data.Dataset):
 
     def _load_videos_info(self, video_names):
         infos = {}
-        for video_name in video_names:
+        tbar = tqdm(video_names)
+        for video_name in tbar:
+            tbar.set_description_str(video_name)
+
             folder = self.annotation_path / video_name
             video_id = video_name.split('_')[0]
 
@@ -126,7 +129,7 @@ class DAVISCoreDataset(data.Dataset):
 
     def im2tensor(self, img_name):
         anno_path = str(self.annotation_path / img_name)
-        jpeg_path = anno_path.replace(self.annotation_path, self.jpeg_path)
+        jpeg_path = anno_path.replace(self.annotation_folder, self.jpeg_folder)
         img = Image.open(jpeg_path).convert('RGB')
 
         tfs = []
@@ -253,7 +256,7 @@ class DAVISTripletDataset(DAVISCoreDataset):
                 pres_anno = video_name + "/" + pair[1]
                 query_anno = video_name + "/" + pair[2]
                 self.frame_list.append(
-                    (support_anno, pres_anno, query_anno, self.infos[video_name]))
+                    (support_anno, pres_anno, query_anno, nobjects))
 
     def get_frame(self, mode, video_name):
         images = sorted(os.listdir(str(self.annotation_path / video_name)))
@@ -294,8 +297,7 @@ class DAVISTripletDataset(DAVISCoreDataset):
         return im[..., r0:r1, c0:c1], mask[..., r0:r1, c0:c1]
 
     def __getitem__(self, inx):
-        support_anno_name, pres_anno_name, query_anno_name, infos = self.frame_list[inx]
-        infos['frames'] = [support_anno_name, pres_anno_name, query_anno_name]
+        support_anno_name, pres_anno_name, query_anno_name, nobjects = self.frame_list[inx]
 
         support_img_name, pres_img_name, query_img_name = \
             map(lambda x: x.replace('png', 'jpg'), [support_anno_name,
@@ -321,7 +323,7 @@ class DAVISTripletDataset(DAVISCoreDataset):
             query_img, query_anno = self.random_crop(
                 query_img, query_anno, cropper)
 
-        return (support_img, support_anno, pres_img, query_img, infos), (pres_anno, query_anno)
+        return (support_img, support_anno, pres_img, query_img, nobjects), (pres_anno, query_anno)
 
     def __len__(self):
         return len(self.frame_list)
