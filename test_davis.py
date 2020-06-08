@@ -26,6 +26,10 @@ def get_argparser():
                         help='frame pair selector mode')
     parser.add_argument("--train", action='store_true',
                         help='load as train dataset')
+    parser.add_argument("--max_skip", default=-1, type=int,
+                        help='maximum number of gap between frames')
+    parser.add_argument("--min_skip", default=1, type=int,
+                        help='minimum number of gap between frames')
     return parser
 
 
@@ -115,5 +119,5 @@ if __name__ == "__main__":
     set_seed(3698)
 
     parser = get_argparser()
-    dataset = test_davis_random_triplet(parser)
+    dataset = test_davis_triplet(parser)
     visualize(dataset)

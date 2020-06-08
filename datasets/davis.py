@@ -7,8 +7,6 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from transforms.normalize import NormMaxMin, Normalize
-from transforms.crop import RandomCrop
 from transforms.crop import MultiRandomCrop
 from transforms.affine import MultiRandomAffine
 from transforms.resize import MultiRandomResize
@@ -127,31 +125,6 @@ class DAVISCoreDataset(data.Dataset):
 
         return img, mask
 
-    def im2tensor(self, img_name):
-        anno_path = str(self.annotation_path / img_name)
-        jpeg_path = anno_path.replace(self.annotation_folder, self.jpeg_folder)
-        img = Image.open(jpeg_path).convert('RGB')
-
-        tfs = []
-        if self.is_train:
-            tfs.append(tvtf.Resize(384))
-        tfs.append(tvtf.ToTensor())
-
-        img_tf = tvtf.Compose(tfs)
-        return img_tf(img)
-
-    def mask2tensor(self, anno_name):
-        anno_path = str(self.annotation_path / anno_name)
-        anno = Image.open(anno_path).convert('P')
-
-        tfs = []
-        if self.is_train:
-            tfs.append(tvtf.Resize(384))
-        anno_tf = tvtf.Compose(tfs)
-        ret = torch.LongTensor(np.array(anno_tf(anno)))
-        ret[ret > 10] = 0
-        return ret
-
     def _filter_small_objs(self, mask, thres):
         # Filter small objects
         ori_objs = np.unique(mask)
@@ -175,6 +148,16 @@ class DAVISCoreDataset(data.Dataset):
         masks[0] = self._filter_small_objs(masks[0], small_obj_thres)
         masks = self._filter_excessive_objs(masks)
         return masks
+
+    def _augmentation(self, img, mask):
+        # img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        img = tvtf.Resize(384)(img)
+        mask = tvtf.Resize(384, 0)(mask)
+        img, mask = MultiRandomCrop(size=384)((img, mask))
+        img, mask = MultiRandomAffine(degrees=(-15, 15),
+                                      scale=(0.95, 1.05),
+                                      shear=(-10, 10))((img, mask))
+        return img, mask
 
 
 class DAVISPairDataset(DAVISCoreDataset):
@@ -212,16 +195,6 @@ class DAVISPairDataset(DAVISCoreDataset):
             return [(images[i], images[j]) for i, j in indices]
         else:
             raise Exception('Unknown mode')
-
-    def _augmentation(self, img, mask):
-        # img, mask = MultiRandomResize(resize_value=384)((img, mask))
-        img = tvtf.Resize(384)(img)
-        mask = tvtf.Resize(384, 0)(mask)
-        img, mask = MultiRandomCrop(size=384)((img, mask))
-        img, mask = MultiRandomAffine(degrees=(-15, 15),
-                                      scale=(0.95, 1.05),
-                                      shear=(-10, 10))((img, mask))
-        return img, mask
 
     def __getitem__(self, inx):
         support_anno_name, query_anno_name, nobjects = self.frame_list[inx]
@@ -292,38 +265,21 @@ class DAVISTripletDataset(DAVISCoreDataset):
         else:
             raise Exception('Unknown mode')
 
-    def random_crop(self, im, mask, cropper):
-        r0, c0, r1, c1 = cropper(im)
-        return im[..., r0:r1, c0:c1], mask[..., r0:r1, c0:c1]
-
     def __getitem__(self, inx):
         support_anno_name, pres_anno_name, query_anno_name, nobjects = self.frame_list[inx]
 
-        support_img_name, pres_img_name, query_img_name = \
-            map(lambda x: x.replace('png', 'jpg'), [support_anno_name,
-                                                    pres_anno_name,
-                                                    query_anno_name])
-
-        support_img, pres_img, query_img = \
-            map(self.im2tensor, [support_img_name,
-                                 pres_img_name,
-                                 query_img_name])
-
-        support_anno, pres_anno, query_anno = \
-            map(self.mask2tensor, [support_anno_name,
-                                   pres_anno_name,
-                                   query_anno_name])
+        ref_img, ref_mask = self._load_frame(support_anno_name,
+                                             self._augmentation)
+        inter_img, inter_mask = self._load_frame(pres_anno_name,
+                                                 self._augmentation)
+        query_img, query_mask = self._load_frame(query_anno_name,
+                                                 self._augmentation)
 
         if self.is_train:
-            cropper = RandomCrop(384)
-            support_img, support_anno = self.random_crop(
-                support_img, support_anno, cropper)
-            pres_img, pres_anno = self.random_crop(
-                pres_img, pres_anno, cropper)
-            query_img, query_anno = self.random_crop(
-                query_img, query_anno, cropper)
+            ref_mask, inter_mask, query_mask = self._filter(
+                [ref_mask, inter_mask, query_mask])
 
-        return (support_img, support_anno, pres_img, query_img, nobjects), (pres_anno, query_anno)
+        return (ref_img, ref_mask, inter_img, query_img, nobjects), (inter_mask, query_mask)
 
     def __len__(self):
         return len(self.frame_list)
@@ -354,20 +310,6 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
         else:
             raise Exception('Unknown mode')
 
-    def random_crop(self, im, mask, cropper):
-        r0, c0, r1, c1 = cropper(im)
-        return im[..., r0:r1, c0:c1], mask[..., r0:r1, c0:c1]
-
-    def _augmentation(self, img, mask):
-        # img, mask = MultiRandomResize(resize_value=384)((img, mask))
-        img = tvtf.Resize(384)(img)
-        mask = tvtf.Resize(384, 0)(mask)
-        img, mask = MultiRandomCrop(size=384)((img, mask))
-        img, mask = MultiRandomAffine(degrees=(-15, 15),
-                                      scale=(0.95, 1.05),
-                                      shear=(-10, 10))((img, mask))
-        return img, mask
-
     def __getitem__(self, inx):
         video_name = self.video_names[inx]
         nobjects = self.infos[video_name]['nobjects']
@@ -386,32 +328,6 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
             ref_mask, query_mask = self._filter([ref_mask, query_mask])
 
         return (ref_img, ref_mask, query_img, nobjects), (query_mask,)
-
-        '''
-        support_img_name = support_anno_name.replace(".png", ".jpg")
-        query_img_name = query_anno_name.replace(".png", ".jpg")
-
-        support_img = self.im2tensor(support_img_name)
-        query_img = self.im2tensor(query_img_name)
-
-        support_anno = self.mask2tensor(support_anno_name)
-        query_anno = self.mask2tensor(query_anno_name)
-
-        if self.is_train:    
-            cropper = RandomCrop(384)
-            support_img, support_anno = self.random_crop(support_img, support_anno, cropper)
-            query_img, query_anno = self.random_crop(query_img, query_anno, cropper)
-           
-            query_objs = np.unique(query_anno)
-            support_objs = np.unique(support_anno)
-            excess_objs = np.setdiff1d(query_objs, support_objs)
-            #if len(excess_objs):
-            #    return self.__getitem__(inx)
-            for obj in excess_objs:
-                query_anno[query_anno == obj] = 0
-
-        return (support_img, support_anno, query_img, nobjects), (query_anno,)
-        '''
 
     def __len__(self):
         return len(self.video_names)
@@ -444,20 +360,6 @@ class DAVISTripletRandomDataset(DAVISCoreDataset):
         else:
             raise Exception('Unknown mode')
 
-    def random_crop(self, im, mask, cropper):
-        r0, c0, r1, c1 = cropper(im)
-        return im[..., r0:r1, c0:c1], mask[..., r0:r1, c0:c1]
-
-    def _augmentation(self, img, mask):
-        img = tvtf.Resize(480)(img)
-        mask = tvtf.Resize(480, 0)(mask)
-        img, mask = MultiRandomResize(resize_value=384)((img, mask))
-        img, mask = MultiRandomCrop(size=384)((img, mask))
-        img, mask = MultiRandomAffine(degrees=(-15, 15),
-                                      scale=(0.95, 1.05),
-                                      shear=(-10, 10))((img, mask))
-        return img, mask
-
     def __getitem__(self, inx):
         video_name = self.video_names[inx]
         nobjects = self.infos[video_name]['nobjects']
@@ -480,38 +382,6 @@ class DAVISTripletRandomDataset(DAVISCoreDataset):
                 self._filter([ref_mask, inter_mask, query_mask])
 
         return (ref_img, ref_mask, inter_img, query_img, nobjects), (inter_mask, query_mask)
-
-        '''
-        support_img, pres_img, query_img = \
-            map(self.im2tensor, [support_img_name,
-                                 pres_img_name,
-                                 query_img_name])
-
-        support_anno, pres_anno, query_anno = \
-            map(self.mask2tensor, [support_anno_name,
-                                   pres_anno_name,
-                                   query_anno_name])
-
-        if self.is_train:
-            cropper = RandomCrop(384)
-            support_img, support_anno = self.random_crop(
-                support_img, support_anno, cropper)
-            pres_img, pres_anno = self.random_crop(
-                pres_img, pres_anno, cropper)
-            query_img, query_anno = self.random_crop(
-                query_img, query_anno, cropper)
-
-            query_objs = set(np.unique(query_anno))
-            support_objs = set(np.unique(support_anno))
-            pres_objs = set(np.unique(pres_anno))
-            excess_objs = len(query_objs.difference(support_objs)) + \
-                len(query_objs.difference(pres_objs)) + \
-                len(pres_objs.difference(support_objs))
-            if excess_objs:
-                return self.__getitem__(inx)
-
-        return (support_img, support_anno, pres_img, query_img, nobjects), (pres_anno, query_anno)
-        '''
 
     def __len__(self):
         return len(self.video_names)
