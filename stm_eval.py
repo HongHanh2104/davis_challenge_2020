@@ -53,6 +53,7 @@ def get_arguments():
     parser.add_argument("-D", type=str, help="path to data",
                         default='/local/DATA')
     parser.add_argument("-id", type=str, default="")
+    parser.add_argument("-w", type=str)
     return parser.parse_args()
 
 
@@ -172,7 +173,7 @@ Testset = DAVIS_MO_Test(DATA_ROOT, resolution='480p',
 Testloader = data.DataLoader(
     Testset, batch_size=1, shuffle=False, num_workers=2, pin_memory=True)
 
-if True:
+if False:
     model = nn.DataParallel(STM())
 else:
     model = STMOriginal()
@@ -185,8 +186,8 @@ if False:
     pth_path = 'STM_weights.pth'
     print('Loading weights:', pth_path)
     model.load_state_dict(torch.load(pth_path))
-elif False:
-    pth_path = 'backup/STM-Triplet-YVOS/best_metric_MeanIoU.pth'
+else:
+    pth_path = f'backup/{args.w}/best_metric_ModifiedMeanIoU.pth'
     print('Loading weights:', pth_path)
     model.load_state_dict(torch.load(pth_path)['model_state_dict'])
     model = nn.DataParallel(model.stm)
