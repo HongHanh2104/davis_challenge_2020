@@ -1,5 +1,5 @@
 id: STM-YVOS-Triplet
-pretrained: null #backup/STM-WarmUp-YVOS/best_metric_MeanIoU.pth
+pretrained: backup/STM-YVOS-Pretrain/best_metric_ModifiedMeanIoU.pth
 seed: 3698
 model:
     name: STMOriginal
@@ -8,30 +8,12 @@ optimizer:
     name: Adam
     args:
         lr: 0.0001
-        #momentum: 0.5
 loss:
     name: MultiCELoss
-    #name: CrossEntropyLoss
-    #name: MixedLoss
-    #args:
-    #    losses:
-    #        - name: FocalLoss
-    #          args:
-    #            gamma: 2
-    #        - name: DiceLoss
-    #          args:
-    #        - name: CrossEntropyLoss
-    #          args:
 metric:
     - name: ModifiedMeanIoU
       args:
           nclasses: 11
-    #- name: PixelAccuracy
-    #  args:
-    #      nclasses: 2
-    #- name: DiceScore
-    #  args:
-    #      nclasses: 2
 scheduler:
     name: ReduceLROnPlateau
     args:
@@ -45,10 +27,10 @@ dataset:
         args:
             root_path: data/YVOS-train
             resolution: 480p
-            phase: train
+            phase: debug
+            year: 2019
             mode: 2
-            max_skip: 5
-            max_npairs: 1
+            min_skip: 7
         loader:
             name: DataLoader
             args:
@@ -62,7 +44,6 @@ dataset:
             phase: val
             mode: 1
             is_train: False
-            #max_npairs: 1
         loader:
             name: DataLoader
             args:

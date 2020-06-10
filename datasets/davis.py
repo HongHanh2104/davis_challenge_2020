@@ -60,7 +60,7 @@ class DAVISCoreDataset(data.Dataset):
         # Load only the names that has prefix in video_name_prefixes
         self.video_names = [folder.name
                             for folder in self.annotation_path.iterdir()
-                            if folder.name.split('_')[0] in video_name_prefixes]
+                            if folder.name in video_name_prefixes]
 
         # Load video infos
         self.infos = self._load_videos_info(self.video_names)
@@ -97,7 +97,7 @@ class DAVISCoreDataset(data.Dataset):
                     anno_im = Image.open(str(x)).convert('P')
                     nobjects = max(nobjects, np.max(anno_im))
                     break
-            info['nobjects'] = nobjects
+            info['nobjects'] = 1  # nobjects
 
             # Get image size (same for all frames)
             info['size'] = torch.tensor(anno_im.size)
@@ -108,7 +108,7 @@ class DAVISCoreDataset(data.Dataset):
     def _load_frame(self, img_name, augmentation):
         # Load annotated mask
         anno_path = str(self.annotation_path / img_name)
-        mask = Image.open(anno_path).convert('P')
+        mask = Image.open(anno_path).convert('L')
 
         # Load frame image
         jpeg_path = anno_path.replace(self.annotation_folder, self.jpeg_folder)
@@ -121,7 +121,7 @@ class DAVISCoreDataset(data.Dataset):
 
         # Convert to tensor
         img = tvtf.ToTensor()(img)
-        mask = torch.LongTensor(np.array(mask))
+        mask = torch.LongTensor(np.array(mask) > 0)
 
         return img, mask
 
@@ -151,12 +151,12 @@ class DAVISCoreDataset(data.Dataset):
 
     def _augmentation(self, img, mask):
         # img, mask = MultiRandomResize(resize_value=384)((img, mask))
-        img = tvtf.Resize(384)(img)
-        mask = tvtf.Resize(384, 0)(mask)
-        img, mask = MultiRandomCrop(size=384)((img, mask))
-        img, mask = MultiRandomAffine(degrees=(-15, 15),
-                                      scale=(0.95, 1.05),
-                                      shear=(-10, 10))((img, mask))
+        # img = tvtf.Resize(384)(img)
+        # mask = tvtf.Resize(384, 0)(mask)
+        # img, mask = MultiRandomCrop(size=384)((img, mask))
+        # img, mask = MultiRandomAffine(degrees=(-15, 15),
+                                    #   scale=(0.95, 1.05),
+                                    #   shear=(-10, 10))((img, mask))
         return img, mask
 
 

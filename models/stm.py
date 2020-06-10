@@ -302,7 +302,8 @@ class STM(nn.Module):
             return self.segment(*args, **kwargs)
         else:
             return self.memorize(*args, **kwargs)
-        
+
+
 class SpatialTransformerModule(nn.Module):
     def __init__(self):
         super().__init__()
@@ -315,7 +316,7 @@ class SpatialTransformerModule(nn.Module):
             nn.MaxPool2d(2, stride=2),
             nn.ReLU(True)
         )
-        
+
         self.localization_m = nn.Sequential(
             nn.Conv2d(11, 64, kernel_size=7),
             nn.MaxPool2d(2, stride=2),
@@ -340,12 +341,14 @@ class SpatialTransformerModule(nn.Module):
     def forward(self, x, mask):
         xs = self.localization(x)
         mask = self.localization_m(mask.float())
-        
-        xs = F.adaptive_avg_pool2d(xs, output_size=(3, 3)).reshape(xs.size(0), -1)
-        mask = F.adaptive_avg_pool2d(mask, output_size=(3, 3)).reshape(mask.size(0), -1)
-        
+
+        xs = F.adaptive_avg_pool2d(
+            xs, output_size=(3, 3)).reshape(xs.size(0), -1)
+        mask = F.adaptive_avg_pool2d(
+            mask, output_size=(3, 3)).reshape(mask.size(0), -1)
+
         xs = torch.cat([xs, mask], dim=1)
-        
+
         theta = self.fc_loc(xs)
         theta = theta.view(-1, 2, 3)
 
@@ -354,19 +357,69 @@ class SpatialTransformerModule(nn.Module):
         return x
 
 
+def visualize(batch):
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    a_img, a_anno, *b_imgs, c_img, nobjects = batch
+    n = len(b_imgs)
+
+    fig, ax = plt.subplots(1, n + 2)
+    ax[0].imshow(a_img[0].cpu().permute(1, 2, 0))
+    ax[0].imshow(a_anno[0].cpu().squeeze(),
+                 vmin=0, vmax=nobjects, alpha=0.5)
+    print(np.unique(a_anno.cpu()))
+
+    for i, b_img in enumerate(b_imgs):
+        ax[1+i].imshow(b_img[0].cpu().permute(1, 2, 0))
+
+    ax[n+1].imshow(c_img[0].cpu().permute(1, 2, 0))
+
+    fig.tight_layout()
+    plt.show()
+    plt.close()
+
+
+def visualize_m(batch):
+    import matplotlib.pyplot as plt
+    *b_annos, c_anno = batch
+    n = len(b_annos)
+
+    if len(c_anno.shape) == 4:
+        c_anno = torch.argmax(c_anno, dim=1)
+
+    fig, ax = plt.subplots(1, n + 1)
+
+    for i, b_anno in enumerate(b_annos):
+        ax[i].imshow(b_anno[0].detach().cpu().squeeze(),
+                     vmin=0, vmax=11)
+
+    if n == 0:
+        ax.imshow(c_anno[0].detach().cpu().squeeze(),
+                  vmin=0, vmax=11)
+    else:
+        ax[n].imshow(c_anno[0].detach().cpu().squeeze(),
+                     vmin=0, vmax=11)
+
+    fig.tight_layout()
+    plt.show()
+    plt.close()
+
+
 class STMOriginal(nn.Module):
     def __init__(self):
         super().__init__()
         stm = nn.DataParallel(STM())
-        #stm.load_state_dict(torch.load('STM_weights.pth'))
+        # stm.load_state_dict(torch.load('STM_weights.pth'))
         self.stm = stm.module
 
-        #for p in self.stm.parameters():
+        # for p in self.stm.parameters():
         #    p.requires_grad = False
 
         #self.stn = SpatialTransformerModule()
 
     def forward(self, inp):
+        # visualize(inp)
         self.stm.eval()
 
         a_im, a_seg, *b_ims, c_im, nobjects = inp
@@ -374,7 +427,7 @@ class STMOriginal(nn.Module):
         num_objects = torch.LongTensor([[nobjects]])
 
         # Memorize a
-        a_seg = F.one_hot(a_seg, 11).permute(0, 3, 1, 2)
+        a_seg = F.one_hot(a_seg, 2).permute(0, 3, 1, 2)
         #a_im = self.stn(a_im, a_seg)
         k, v = self.stm.memorize(a_im, a_seg, num_objects)
 
@@ -382,14 +435,26 @@ class STMOriginal(nn.Module):
         for b_im in b_ims:
             # Segment b
             b_logit = self.stm.segment(b_im, k, v, num_objects)
+            # print('Inter pred')
+            # import matplotlib.pyplot as plt
+            # plt.imshow(torch.argmax(b_logit[0].detach().cpu(), dim=0))
+            # plt.show()
             b_logits.append(b_logit)
             # Memorize b
             b_pred = F.softmax(b_logit, dim=1)
+            import matplotlib.pyplot as plt
+            plt.imshow(torch.argmax(b_pred[0].detach().cpu(), dim=0))
+            plt.show()
             #b_im = self.stn(b_im, b_pred)
             b_k, b_v = self.stm.memorize(b_im, b_pred, num_objects)
             k = torch.cat([k, b_k], dim=3)
             v = torch.cat([v, b_v], dim=3)
-        
+
         logit = self.stm.segment(c_im, k, v, num_objects)
+        # print('Query pred')
+        # print(logit.shape)
+        # import matplotlib.pyplot as plt
+        # plt.imshow(torch.argmax(logit[0].detach().cpu(), dim=0))
+        # plt.show()
 
         return (*b_logits, logit)

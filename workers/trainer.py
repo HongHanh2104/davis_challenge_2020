@@ -81,6 +81,7 @@ class Trainer():
         # print('Saving current model...')
         # torch.save(data, os.path.join(self.save_dir, 'current.pth'))
 
+    # @torch.no_grad()
     def train_epoch(self, epoch, dataloader):
         # 0: Record loss during training process
         running_loss = meter.AverageValueMeter()
