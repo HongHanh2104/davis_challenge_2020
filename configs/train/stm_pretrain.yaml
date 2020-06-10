@@ -32,7 +32,7 @@ dataset:
                     ann_folder: annotations
                     data_type: train2017
                     img_folder: train2017
-            niters: 3500
+            niters: 1
             nimgs: 3
         loader:
             name: DataLoader
