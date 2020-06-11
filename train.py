@@ -53,7 +53,7 @@ def train(config):
     set_seed(config['seed'])
     optimizer = get_instance(config['optimizer'],
                              params=model.parameters())
-    #if pretrained is not None:
+    # if pretrained is not None:
     #    optimizer.load_state_dict(pretrained['optimizer_state_dict'])
 
     # 5: Define Scheduler

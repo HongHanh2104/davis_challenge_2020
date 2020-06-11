@@ -1,5 +1,5 @@
 id: STM-FSS
-pretrained: null
+pretrained: null #backup/STM-YVOS-Pretrain/best_metric_ModifiedMeanIoU.pth
 seed: 3698
 model:
     name: STMOriginal

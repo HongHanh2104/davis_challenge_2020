@@ -175,21 +175,23 @@ class Memory(nn.Module):
         super(Memory, self).__init__()
 
     def forward(self, m_in, m_out, q_in, q_out):  # m_in: o,c,t,h,w
-        B, D_e, T, H, W = m_in.size()
+        # print(m_in.shape, m_out.shape, q_in.shape, q_out.shape)
+        B, D_e, T, Hi, Wi = m_in.size()
+        _, _, Ho, Wo = q_in.size()
         _, D_o, _, _, _ = m_out.size()
 
-        mi = m_in.view(B, D_e, T*H*W)
+        mi = m_in.view(B, D_e, T*Hi*Wi)
         mi = torch.transpose(mi, 1, 2)  # b, THW, emb
 
-        qi = q_in.view(B, D_e, H*W)  # b, emb, HW
+        qi = q_in.view(B, D_e, Ho*Wo)  # b, emb, HW
 
         p = torch.bmm(mi, qi)  # b, THW, HW
         p = p / math.sqrt(D_e)
         p = F.softmax(p, dim=1)  # b, THW, HW
 
-        mo = m_out.view(B, D_o, T*H*W)
+        mo = m_out.view(B, D_o, T*Hi*Wi)
         mem = torch.bmm(mo, p)  # Weighted-sum B, D_o, HW
-        mem = mem.view(B, D_o, H, W)
+        mem = mem.view(B, D_o, Ho, Wo)
 
         mem_out = torch.cat([mem, q_out], dim=1)
 
@@ -224,8 +226,8 @@ class STM(nn.Module):
     def Pad_memory(self, mems, num_objects, K):
         pad_mems = []
         for mem in mems:
-            pad_mem = ToCuda(torch.zeros(1, K, mem.size()[
-                             1], 1, mem.size()[2], mem.size()[3]))
+            pad_mem = torch.zeros(1, K, mem.size()[1],
+                                  1, mem.size()[2], mem.size()[3]).to(mem.device)
             pad_mem[0, 1:num_objects+1, :, 0] = mem
             pad_mems.append(pad_mem)
         return pad_mems
@@ -258,7 +260,7 @@ class STM(nn.Module):
 
     def Soft_aggregation(self, ps, K):
         num_objects, H, W = ps.shape
-        em = ToCuda(torch.zeros(1, K, H, W))
+        em = torch.zeros(1, K, H, W).to(ps.device)
         em[0, 0] = torch.prod(1-ps, dim=0)  # bg prob
         em[0, 1:num_objects+1] = ps  # obj prob
         em = torch.clamp(em, 1e-7, 1-1e-7)
@@ -284,6 +286,27 @@ class STM(nn.Module):
         # memory select kv:(1, K, C, T, H, W)
         m4, viz = self.Memory(keys[0, 1:num_objects+1],
                               values[0, 1:num_objects+1], k4e, v4e)
+
+        # import matplotlib.pyplot as plt
+        # for i in range(viz.size(2)):
+        #     plt.subplot(1, 2, 1)
+        #     m = torch.zeros(k4e.shape[-2], k4e.shape[-1])
+        #     m[i // k4e.shape[-2], i % k4e.shape[-2]] = 1
+        #     m = F.interpolate(m.unsqueeze(0).unsqueeze(
+        #         0), (frame.shape[-2], frame.shape[-1])).squeeze(0).squeeze(0)
+        #     f = frame[0].permute(1, 2, 0).detach().cpu()
+        #     plt.imshow(f)
+        #     plt.imshow(m, alpha=0.5)
+        #     plt.subplot(1, 2, 2)
+        #     v = viz[0, :, i].reshape(14, 14).detach().cpu()
+        #     v = F.interpolate(v.unsqueeze(
+        #         0).unsqueeze(0), (224, 224)).squeeze(0).squeeze(0)
+        #     plt.imshow(v)
+        #     plt.tight_layout()
+        #     plt.savefig(f'viz_/{i}')
+        #     # plt.show()
+        #     plt.close()
+
         logits = self.Decoder(m4, r3e, r2e)
         ps = F.softmax(logits, dim=1)[:, 1]  # no, h, w
         # ps = indipendant possibility to belong to each object

@@ -317,12 +317,24 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
             self.get_frame(self.mode, video_name)
 
         support_anno_name = video_name + '/' + support_anno_name
-        query_anno_name = video_name + '/' + query_anno_name
-
         ref_img, ref_mask = self._load_frame(support_anno_name,
                                              self._augmentation)
-        query_img, query_mask = self._load_frame(query_anno_name,
-                                                 self._augmentation)
+
+        if random.uniform(0, 1) < 0.8:
+            neg_idx = inx
+            while neg_idx == inx:
+                neg_idx = random.randrange(0, len(self.video_names))
+            video_name = self.video_names[neg_idx]
+            _, query_anno_name = \
+                self.get_frame(self.mode, video_name)
+            query_anno_name = video_name + '/' + query_anno_name
+            query_img, query_mask = self._load_frame(query_anno_name,
+                                                     self._augmentation)
+            query_mask = torch.zeros(query_img.shape[-2:]).long()
+        else:
+            query_anno_name = video_name + '/' + query_anno_name
+            query_img, query_mask = self._load_frame(query_anno_name,
+                                                     self._augmentation)
 
         if self.is_train:
             ref_mask, query_mask = self._filter([ref_mask, query_mask])
