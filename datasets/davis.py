@@ -320,11 +320,12 @@ class DAVISPairRandomDataset(DAVISCoreDataset):
         ref_img, ref_mask = self._load_frame(support_anno_name,
                                              self._augmentation)
 
-        if random.uniform(0, 1) < 0.8:
-            neg_idx = inx
-            while neg_idx == inx:
+        if random.uniform(0, 1) < 0.0:
+            neg_video_name = video_name
+            while neg_video_name == video_name:
                 neg_idx = random.randrange(0, len(self.video_names))
-            video_name = self.video_names[neg_idx]
+                neg_video_name = self.video_names[neg_idx]
+            video_name = neg_video_name
             _, query_anno_name = \
                 self.get_frame(self.mode, video_name)
             query_anno_name = video_name + '/' + query_anno_name
