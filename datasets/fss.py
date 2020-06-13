@@ -10,35 +10,36 @@ from pathlib import Path
 import os
 import random
 
-class PASCAL5i(data.Dataset):
+class FSSDataset(data.Dataset):
     def __init__(self, root_path=None,
                  annotation_folder="Annotations",
                  jpeg_folder="JPEGImages",
                  k=3):
         super().__init__()
 
-        assert root_path is not None, "Missing root path, should be a path PASCAL-5i dataset!"
+        assert root_path is not None, "Missing root path, should be a path FSS dataset!"
         self.root_path = Path(root_path)
 
         self.annotation_path = self.root_path / annotation_folder
         self.jpeg_path = self.root_path / jpeg_folder
 
-        self.k = k
+        self.k = int(k)
         self.classes = os.listdir(self.jpeg_path)
 
     def __getitem__(self, idx):
         class_id = self.classes[idx]
         path = os.path.join(self.jpeg_path, class_id)
+        #print(type(path), type(self.k))
         imgs = random.sample(os.listdir(path), self.k + 1)
         print(class_id, imgs)
-        query = random.sample(imgs, 1)
+        query = random.sample(imgs, 1)[0]
         refs = [x for x in imgs if x not in query]
         
         # Query image
-        img_query = Image.open(os.path.join(path, query[0])).convert('RGB')
+        img_query = Image.open(os.path.join(path, query)).convert('RGB')
         img_query = tvtf.ToTensor()(img_query)
 
-        mask = Image.open(os.path.join(path.replace('JPEGImages', 'Annotations'), query[0])).convert('L')
+        mask = Image.open(os.path.join(path.replace('JPEGImages', 'Annotations'), query.replace('jpg', 'png'))).convert('L')
         mask_query = torch.LongTensor(np.array(mask) > 0)
 
         # Ref frame
@@ -49,7 +50,7 @@ class PASCAL5i(data.Dataset):
             img = tvtf.ToTensor()(img)
             img_refs.append(img)
 
-            mask = Image.open(os.path.join(path.replace('JPEGImages', 'Annotations'), ref)).convert('L')
+            mask = Image.open(os.path.join(path.replace('JPEGImages', 'Annotations'), ref.replace('jpg', 'png'))).convert('L')
             mask = torch.LongTensor(np.array(mask) > 0)
             mask_refs.append(mask)
 
@@ -69,7 +70,7 @@ def test():
     parser.add_argument("--k", default=3)
     args = parser.parse_args()
 
-    dataset = PASCAL5i(args.root, args.anno, args.jpeg, args.k)
+    dataset = FSSDataset(args.root, args.anno, args.jpeg, args.k)
     dataloader = data.DataLoader(dataset, batch_size=1, shuffle=True)
 
     for idx, batch in enumerate(dataloader):

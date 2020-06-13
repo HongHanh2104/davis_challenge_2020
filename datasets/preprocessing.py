@@ -38,7 +38,7 @@ def pascal_preprocess(root,
         mask = Image.open(path).convert('P')
         class_id = np.unique(mask)
         class_id = [x for x in class_id if 0 < x < 255]
-        
+        # Copy JPEGImages into class folders
         [os.system('cp {}/{} {}/{}'.format(root_img_path, \
                                     _file.replace('png', 'jpg'), \
                                     dst_img_path, \
