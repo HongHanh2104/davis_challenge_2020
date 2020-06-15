@@ -436,48 +436,31 @@ class STMOriginal(nn.Module):
         # stm.load_state_dict(torch.load('STM_weights.pth'))
         self.stm = stm.module
 
-        # for p in self.stm.parameters():
-        #    p.requires_grad = False
-
-        #self.stn = SpatialTransformerModule()
-
     def forward(self, inp):
         # visualize(inp)
         self.stm.eval()
 
-        a_im, a_seg, *b_ims, c_im, nobjects = inp
-        # {a,b,c}_im: B3HW, a_seg: BHW
-        num_objects = torch.LongTensor([[nobjects]])
+        ref_imgs, ref_masks, q_img = inp
+        num_objects = torch.LongTensor([1])
 
-        # Memorize a
-        a_seg = F.one_hot(a_seg, 2).permute(0, 3, 1, 2)
-        #a_im = self.stn(a_im, a_seg)
-        k, v = self.stm.memorize(a_im, a_seg, num_objects)
+        # Memorize the first reference image
+        first_img = ref_imgs[0]
+        first_mask = F.one_hot(ref_masks[0], 2).permute(0, 3, 1, 2)
+        k, v = self.stm.memorize(first_img, first_mask, num_objects)
 
-        b_logits = []
-        for b_im in b_ims:
-            # Segment b
-            b_logit = self.stm.segment(b_im, k, v, num_objects)
-            # print('Inter pred')
-            # import matplotlib.pyplot as plt
-            # plt.imshow(torch.argmax(b_logit[0].detach().cpu(), dim=0))
-            # plt.show()
-            b_logits.append(b_logit)
-            # Memorize b
-            b_pred = F.softmax(b_logit, dim=1)
-            import matplotlib.pyplot as plt
-            plt.imshow(torch.argmax(b_pred[0].detach().cpu(), dim=0))
-            plt.show()
-            #b_im = self.stn(b_im, b_pred)
-            b_k, b_v = self.stm.memorize(b_im, b_pred, num_objects)
-            k = torch.cat([k, b_k], dim=3)
-            v = torch.cat([v, b_v], dim=3)
+        # Memorize the rest of the reference images
+        for i in range(1, len(ref_imgs) - 1):
+            img = ref_imgs[i]
+            mask = F.one_hot(ref_masks[i], 2).permute(0, 3, 1, 2)
+            nk, nv = self.stm.memorize(img, mask, num_objects)
+            k = torch.cat([k, nk], dim=3)
+            v = torch.cat([v, nv], dim=3)
 
-        logit = self.stm.segment(c_im, k, v, num_objects)
+        logit = self.stm.segment(q_img, k, v, num_objects)
         # print('Query pred')
         # print(logit.shape)
         # import matplotlib.pyplot as plt
         # plt.imshow(torch.argmax(logit[0].detach().cpu(), dim=0))
         # plt.show()
 
-        return (*b_logits, logit)
+        return logit
