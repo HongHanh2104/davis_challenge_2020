@@ -162,7 +162,6 @@ def fss1000_preprocess(root,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--root', help='Path to dataset')
     parser.add_argument('--data_folder', help='The folder of dataset')
     parser.add_argument('--dst_folder', help='The destination folder.')
     args = parser.parse_args()

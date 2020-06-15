@@ -2,78 +2,161 @@ import torch
 from torch.utils import data
 from torchvision import transforms as tvtf
 import numpy as np
-import PIL
 from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from pathlib import Path
-import os
-import random
 
-class FSSDataset(data.Dataset):
-    def __init__(self, root_path=None,
-                 annotation_folder="Annotations",
-                 jpeg_folder="JPEGImages",
-                 k=3):
+from itertools import permutations
+from pathlib import Path
+import random
+import os
+
+FSS_IMG_DIR = "JPEGImages"
+FSS_ANNO_DIR = "Annotations"
+FSS_IMGSETS_DIR = "ImageSets"
+
+
+class FSSCoreDataset(data.Dataset):
+    def __init__(self, root=None, phase=None, nrefs=1, is_train=True):
         super().__init__()
 
-        assert root_path is not None, "Missing root path, should be a path FSS dataset!"
-        self.root_path = Path(root_path)
+        assert root is not None, \
+            'Missing root path, should be a path to an FSS directory!'
 
-        self.annotation_path = self.root_path / annotation_folder
-        self.jpeg_path = self.root_path / jpeg_folder
+        self.root = root
+        self.img_dir = os.path.join(self.root, FSS_IMG_DIR)
+        self.anno_dir = os.path.join(self.root, FSS_ANNO_DIR)
+        self.imgsets_dir = os.path.join(self.root, FSS_IMGSETS_DIR)
 
-        self.k = int(k)
-        self.classes = os.listdir(self.jpeg_path)
+        assert isinstance(nrefs, int) and nrefs > 0, \
+            'Number of references must be a positive integer!'
+        self.nrefs = nrefs
+
+        assert phase is not None, \
+            f'Missing classes list, should be the name of a file in {FSS_IMGSETS_DIR}!'
+        classes = open(f'{self.imgsets_dir}/{phase}.txt').readlines()
+        self.classes = [x.strip() for x in classes]
+
+        self.is_train = is_train
+
+    def _load_frame(self, img_name, augmentation):
+        # Load annotated mask
+        anno_path = os.path.join(self.anno_dir, img_name)
+        mask = Image.open(anno_path).convert('P')
+
+        # Load frame image
+        jpeg_path = anno_path.replace(self.anno_dir, self.img_dir)
+        jpeg_path = jpeg_path.replace('.png', '.jpg')
+        img = Image.open(jpeg_path).convert('RGB')
+
+        # Augmentation (if train)
+        if self.is_train:
+            img, mask = augmentation(img, mask)
+
+        # Convert to tensor
+        img = tvtf.ToTensor()(img)
+        mask = torch.LongTensor(np.array(mask))
+
+        return img, mask
+
+    def _augmentation(self, img, mask):
+        # img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        # img = tvtf.Resize(384)(img)
+        # mask = tvtf.Resize(384, 0)(mask)
+        # img, mask = MultiRandomCrop(size=384)((img, mask))
+        # img, mask = MultiRandomAffine(degrees=(-15, 15),
+                                    #   scale=(0.95, 1.05),
+                                    #   shear=(-10, 10))((img, mask))
+        return img, mask
+
+
+class FSSDataset(FSSCoreDataset):
+    def __init__(self, max_npairs=-1, **kwargs):
+        super().__init__(**kwargs)
+
+        self.max_npairs = max_npairs
+
+        self.tuples = []
+        for _class in self.classes:
+            anno_tuples = self.get_frame(_class)
+            for anno_tuple in anno_tuples:
+                anno_refs = [_class + "/" + x for x in anno_tuple[:-1]]
+                anno_query = _class + "/" + anno_tuple[-1]
+                self.tuples.append((anno_refs, anno_query))
+
+    def get_frame(self, _class):
+        images = os.listdir(os.path.join(self.anno_dir, _class))
+        all_pairs = list(permutations(images, self.nrefs + 1))
+        if self.max_npairs == -1:
+            return all_pairs
+        return random.sample(all_pairs, k=self.max_npairs)
+
+    def __getitem__(self, inx):
+        anno_ref_names, anno_query_name = self.tuples[inx]
+
+        ref_imgs, ref_masks = [], []
+        for anno_ref_name in anno_ref_names:
+            ref_img, ref_mask = self._load_frame(anno_ref_name,
+                                                 self._augmentation)
+            ref_imgs.append(ref_img)
+            ref_masks.append(ref_mask)
+        query_img, query_mask = self._load_frame(anno_query_name,
+                                                 self._augmentation)
+
+        return (ref_imgs, ref_masks, query_img), query_mask
+
+    def __len__(self):
+        return len(self.tuples)
+
+
+class FSSRandomDataset(FSSCoreDataset):
+    def __init__(self, n=1, **kwargs):
+        super().__init__(**kwargs)
+
+        self.n = n
+        self.classes = self.classes * self.n
 
     def __getitem__(self, idx):
         class_id = self.classes[idx]
-        path = os.path.join(self.jpeg_path, class_id)
-        #print(type(path), type(self.k))
-        imgs = random.sample(os.listdir(path), self.k + 1)
-        print(class_id, imgs)
-        query = random.sample(imgs, 1)[0]
-        refs = [x for x in imgs if x not in query]
-        
-        # Query image
-        img_query = Image.open(os.path.join(path, query)).convert('RGB')
-        img_query = tvtf.ToTensor()(img_query)
+        path = os.path.join(self.anno_dir, class_id)
 
-        mask = Image.open(os.path.join(path.replace('JPEGImages', 'Annotations'), query.replace('jpg', 'png'))).convert('L')
-        mask_query = torch.LongTensor(np.array(mask) > 0)
+        imgs = random.sample(os.listdir(path), self.nrefs + 1)
+        anno_query_name = os.path.join(class_id, imgs[-1])
+        anno_ref_names = [os.path.join(class_id, x)
+                          for x in imgs[:-1]]
 
-        # Ref frame
-        img_refs = []
-        mask_refs = []
-        for ref in refs:
-            img = Image.open(os.path.join(path, ref)).convert('RGB')
-            img = tvtf.ToTensor()(img)
-            img_refs.append(img)
+        ref_imgs, ref_masks = [], []
+        for anno_ref_name in anno_ref_names:
+            ref_img, ref_mask = self._load_frame(anno_ref_name,
+                                                 self._augmentation)
+            ref_imgs.append(ref_img)
+            ref_masks.append(ref_mask)
+        query_img, query_mask = self._load_frame(anno_query_name,
+                                                 self._augmentation)
 
-            mask = Image.open(os.path.join(path.replace('JPEGImages', 'Annotations'), ref.replace('jpg', 'png'))).convert('L')
-            mask = torch.LongTensor(np.array(mask) > 0)
-            mask_refs.append(mask)
-
-        return (img_refs, mask_refs, img_query), mask_query
+        return (ref_imgs, ref_masks, query_img), query_mask
 
     def __len__(self):
         return len(self.classes)
 
+
 def test():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", help='path to DAVIS-like folder')
-    parser.add_argument("--anno", default="Annotations",
-                        help='path to Annotations subfolder (of ROOT)')
-    parser.add_argument("--jpeg", default="JPEGImages",
-                        help='path to JPEGImages subfolder (of ROOT)')
-    parser.add_argument("--k", default=3)
+    parser.add_argument('--root',
+                        help='path to an FSS directory')
+    parser.add_argument('--phase',
+                        help='name of the phase')
+    parser.add_argument('--nrefs', default=1, type=int,
+                        help='number of reference images')
     args = parser.parse_args()
 
-    dataset = FSSDataset(args.root, args.anno, args.jpeg, args.k)
+    dataset = FSSDataset(root=args.root,
+                         phase=args.phase,
+                         nrefs=args.nrefs)
     dataloader = data.DataLoader(dataset, batch_size=1, shuffle=True)
 
-    for idx, batch in enumerate(dataloader):
+    for idx, batch in tqdm(enumerate(dataloader)):
         img_refs, mask_refs, img_query = batch[0]
         mask_query = batch[1]
 
@@ -81,16 +164,15 @@ def test():
         fig, ax = plt.subplots(1, k + 1)
 
         for i, (img_ref, mask_ref) in enumerate(zip(img_refs, mask_refs)):
-            ax[i].imshow(img_ref[0].permute(1,2,0))
+            ax[i].imshow(img_ref[0].permute(1, 2, 0))
             ax[i].imshow(mask_ref[0].squeeze(0), alpha=0.5)
-        
+
         ax[k].imshow(img_query[0].permute(1, 2, 0))
         ax[k].imshow(mask_query[0].squeeze(0), alpha=0.5)
 
         plt.tight_layout()
         plt.show()
         plt.close()
-
 
 
 if __name__ == "__main__":

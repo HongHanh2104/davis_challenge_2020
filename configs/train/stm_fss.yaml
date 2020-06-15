@@ -9,9 +9,9 @@ optimizer:
     args:
         lr: 0.0001
 loss:
-    name: MultiCELoss
+    name: CrossEntropyLoss
 metric:
-    - name: ModifiedMeanIoU
+    - name: MeanIoU
       args:
           nclasses: 2
 scheduler:
@@ -23,27 +23,22 @@ scheduler:
         verbose: True
 dataset:
     train:
-        name: DAVISPairRandomDataset
+        name: FSSRandomDataset
         args:
-            root_path: data/FSS-1000
-            resolution: 480p
-            phase: train
-            year: 2020
-            mode: 0
+            root: data/PASCAL-5i
+            phase: 0_train
+            n: 1
         loader:
             name: DataLoader
             args:
                 batch_size: 1
                 shuffle: True
     val:
-        name: DAVISPairDataset
+        name: FSSRandomDataset
         args:
-            root_path: data/FSS-1000
-            resolution: 480p
-            phase: test
-            year: 2020
-            mode: 1
-            is_train: False
+            root: data/PASCAL-5i
+            phase: 0_val
+            n: 100
         loader:
             name: DataLoader
             args:
