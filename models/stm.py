@@ -384,45 +384,16 @@ def visualize(batch):
     import matplotlib.pyplot as plt
     import numpy as np
 
-    a_img, a_anno, *b_imgs, c_img, nobjects = batch
-    n = len(b_imgs)
+    ref_imgs, ref_masks, q_img = batch
+    k = len(ref_imgs)
 
-    fig, ax = plt.subplots(1, n + 2)
-    ax[0].imshow(a_img[0].cpu().permute(1, 2, 0))
-    ax[0].imshow(a_anno[0].cpu().squeeze(),
-                 vmin=0, vmax=nobjects, alpha=0.5)
-    print(np.unique(a_anno.cpu()))
+    fig, ax = plt.subplots(1, k + 1)
 
-    for i, b_img in enumerate(b_imgs):
-        ax[1+i].imshow(b_img[0].cpu().permute(1, 2, 0))
+    for i, (ref_img, ref_mask) in enumerate(zip(ref_imgs, ref_masks)):
+        ax[i].imshow(ref_img[0].cpu().permute(1, 2, 0))
+        ax[i].imshow(ref_mask[0].cpu().squeeze(0), alpha=0.5)
 
-    ax[n+1].imshow(c_img[0].cpu().permute(1, 2, 0))
-
-    fig.tight_layout()
-    plt.show()
-    plt.close()
-
-
-def visualize_m(batch):
-    import matplotlib.pyplot as plt
-    *b_annos, c_anno = batch
-    n = len(b_annos)
-
-    if len(c_anno.shape) == 4:
-        c_anno = torch.argmax(c_anno, dim=1)
-
-    fig, ax = plt.subplots(1, n + 1)
-
-    for i, b_anno in enumerate(b_annos):
-        ax[i].imshow(b_anno[0].detach().cpu().squeeze(),
-                     vmin=0, vmax=11)
-
-    if n == 0:
-        ax.imshow(c_anno[0].detach().cpu().squeeze(),
-                  vmin=0, vmax=11)
-    else:
-        ax[n].imshow(c_anno[0].detach().cpu().squeeze(),
-                     vmin=0, vmax=11)
+    ax[k].imshow(q_img[0].cpu().permute(1, 2, 0))
 
     fig.tight_layout()
     plt.show()
@@ -437,7 +408,7 @@ class STMOriginal(nn.Module):
         self.stm = stm.module
 
     def forward(self, inp):
-        # visualize(inp)
+        visualize(inp)
         self.stm.eval()
 
         ref_imgs, ref_masks, q_img = inp
