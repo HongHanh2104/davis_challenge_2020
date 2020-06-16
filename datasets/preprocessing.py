@@ -10,9 +10,9 @@ from tqdm import tqdm
 
 # Target folder structure
 
-FSS_IMG_DIR = "JPEGImages"
-FSS_ANNO_DIR = "Annotations"
-FSS_IMGSETS_DIR = "ImageSets"
+FSS_IMG_DIR = 'JPEGImages'
+FSS_ANNO_DIR = 'Annotations'
+FSS_IMGSETS_DIR = 'ImageSets'
 
 
 def kfold_split(classes, random_split=False, k=5):
@@ -27,7 +27,7 @@ def kfold_split(classes, random_split=False, k=5):
     return folds
 
 
-def create_target_directory(root, classes):
+def create_target_directory(dst_folder, classes):
     '''
         Target directory structure:
         - root
@@ -44,15 +44,15 @@ def create_target_directory(root, classes):
     '''
 
     # Create root
-    os.makedirs(root, exist_ok=True)
+    os.makedirs(dst_folder, exist_ok=True)
 
     # Create ImageSets folder
-    os.makedirs(f"{root}/{FSS_IMGSETS_DIR}", exist_ok=True)
+    os.makedirs(f'{dst_folder}/{FSS_IMGSETS_DIR}', exist_ok=True)
 
     # Create JPEGImages and Annotations
     for x in [FSS_IMG_DIR, FSS_ANNO_DIR]:
         for y in classes:
-            os.makedirs(f"{root}/{x}/{y}", exist_ok=True)
+            os.makedirs(f'{dst_folder}/{x}/{y}', exist_ok=True)
 
 # ========================= PASCAL_5i =========================
 
@@ -64,11 +64,12 @@ PASCAL_CLASS = ['aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
 
 PASCAL_IMG_DIR = 'JPEGImages'
 PASCAL_ANNO_DIR = 'SegmentationClass'
+PASCAL_IMAGESET_DIR = 'ImageSets'
 
 
 def create_class_txt(root, classes, dst_folder):
-    namefile = "classes.txt"
-    with open(root / dst_folder / "ImageSets" / namefile, "w") as f:
+    namefile = 'classes.txt'
+    with open(root / dst_folder / PASCAL_IMAGESET_DIR / namefile, 'w') as f:
         for c in classes:
             f.write(c + "\n")
 
@@ -125,14 +126,38 @@ def gen_pascal_5i(fss_folder):
         open(f'{imgsets_dir}/{i}_train.txt', 'w').write('\n'.join(train))
         open(f'{imgsets_dir}/{i}_val.txt', 'w').write('\n'.join(val))
 
+# ========================= FSS-1000 =========================
+FSS1000_DATA = "fewshot_data"
+
+def fss1000tofss(data_folder,
+                 dst_folder):
+    data_path = Path(data_folder)
+    classes = os.listdir(data_path / FSS1000_DATA)
+    # Create target directory 
+    create_target_directory(dst_folder, classes)
+
+    dst_path = Path(dst_folder)
+    dst_img_path = dst_path / FSS_IMG_DIR
+    dst_mask_path = dst_path / FSS_ANNO_DIR
+
+    files = os.listdir(data_path / FSS1000_DATA)
+    
+    progress_bar = tqdm(files)
+    for _file in progress_bar:
+        progress_bar.set_description_str(_file)
+        imgs = glob.glob(str(data_path / FSS1000_DATA / _file / '*.jpg'))
+        [os.system(f'cp "{x}" "{dst_img_path}/{_file}"') for x in imgs]
+        
+        masks = [x.replace('jpg', 'png') for x in imgs]
+        [os.system(f'cp "{x}" "{dst_mask_path}/{_file}"') for x in masks]
 
 def visualize(root):
     import random
-
     root = Path(root)
-    img_path = root / IMAGE_FOLDER
-    mask_path = root / MASK_FOLDER
-    classes = random.sample(PASCAL_CLASS, 5 + 1)
+    img_path = root / FSS_IMG_DIR
+    mask_path = root / FSS_ANNO_DIR
+    classes_list = os.listdir(root / FSS_IMG_DIR) 
+    classes = random.sample(classes_list, 5 + 1)
     for c in classes:
         imgs = random.sample(os.listdir(img_path / c), 3 + 1)
         print(c)
@@ -148,16 +173,7 @@ def visualize(root):
             plt.close()
 
 
-def fss1000_preprocess(root,
-                       data_folder,
-                       img_folder='JPEGImages',
-                       mask_folder='Annotations',
-                       dst_folder='new_fss1000'):
-    root_path = Path(root)
 
-    classes = os.listdir(root_path / data_folder)
-    print(type(classes[0]), type(PASCAL_CLASS[0]))
-    create_data_structure(root, classes, dst_folder)
 
 
 if __name__ == "__main__":
@@ -166,9 +182,7 @@ if __name__ == "__main__":
     parser.add_argument('--dst_folder', help='The destination folder.')
     args = parser.parse_args()
 
-    pascal2fss(args.data_folder, args.dst_folder)
-    gen_pascal_5i(args.dst_folder)
+    #pascal2fss(args.data_folder, args.dst_folder)
+    fss1000tofss(args.data_folder, args.dst_folder)
 
-    # visualize(os.path.join(args.root, args.dst_folder))
-
-    #fss1000_preprocess(args.root, args.data_folder, args.img_folder, args.mask_folder, args.dst_folder)
+    #visualize(args.dst_folder)
