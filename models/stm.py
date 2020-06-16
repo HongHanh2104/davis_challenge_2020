@@ -85,6 +85,7 @@ class Encoder_M(nn.Module):
 
     def forward(self, in_f, in_m, in_o):
         f = (in_f - self.mean) / self.std
+
         m = torch.unsqueeze(in_m, dim=1).float()  # add channel dim
         o = torch.unsqueeze(in_o, dim=1).float()  # add channel dim
 
@@ -327,59 +328,6 @@ class STM(nn.Module):
             return self.memorize(*args, **kwargs)
 
 
-class SpatialTransformerModule(nn.Module):
-    def __init__(self):
-        super().__init__()
-        # Localisation network
-        self.localization = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=7),
-            nn.MaxPool2d(2, stride=2),
-            nn.ReLU(True),
-            nn.Conv2d(64, 32, kernel_size=5),
-            nn.MaxPool2d(2, stride=2),
-            nn.ReLU(True)
-        )
-
-        self.localization_m = nn.Sequential(
-            nn.Conv2d(11, 64, kernel_size=7),
-            nn.MaxPool2d(2, stride=2),
-            nn.ReLU(True),
-            nn.Conv2d(64, 32, kernel_size=5),
-            nn.MaxPool2d(2, stride=2),
-            nn.ReLU(True)
-        )
-
-        # Regressor for the 3 * 2 affine matrix
-        self.fc_loc = nn.Sequential(
-            nn.Linear(2 * 32 * 3 * 3, 32),
-            nn.ReLU(True),
-            nn.Linear(32, 3 * 2)
-        )
-
-        # Initialize the weights/bias with identity transformation
-        self.fc_loc[2].weight.data.zero_()
-        self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0],
-                                                    dtype=torch.float))
-
-    def forward(self, x, mask):
-        xs = self.localization(x)
-        mask = self.localization_m(mask.float())
-
-        xs = F.adaptive_avg_pool2d(
-            xs, output_size=(3, 3)).reshape(xs.size(0), -1)
-        mask = F.adaptive_avg_pool2d(
-            mask, output_size=(3, 3)).reshape(mask.size(0), -1)
-
-        xs = torch.cat([xs, mask], dim=1)
-
-        theta = self.fc_loc(xs)
-        theta = theta.view(-1, 2, 3)
-
-        grid = F.affine_grid(theta, x.size(), align_corners=True)
-        x = F.grid_sample(x, grid, align_corners=True)
-        return x
-
-
 def visualize(batch):
     import matplotlib.pyplot as plt
     import numpy as np
@@ -428,10 +376,5 @@ class STMOriginal(nn.Module):
             v = torch.cat([v, nv], dim=3)
 
         logit = self.stm.segment(q_img, k, v, num_objects)
-        # print('Query pred')
-        # print(logit.shape)
-        # import matplotlib.pyplot as plt
-        # plt.imshow(torch.argmax(logit[0].detach().cpu(), dim=0))
-        # plt.show()
 
         return logit
