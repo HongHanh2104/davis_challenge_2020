@@ -50,9 +50,9 @@ def create_target_directory(dst_folder, classes):
     os.makedirs(f'{dst_folder}/{FSS_IMGSETS_DIR}', exist_ok=True)
 
     # Create JPEGImages and Annotations
-    for x in [FSS_IMG_DIR, FSS_ANNO_DIR]:
-        for y in classes:
-            os.makedirs(f'{dst_folder}/{x}/{y}', exist_ok=True)
+    os.makedirs(f'{dst_folder}/{FSS_IMG_DIR}', exist_ok=True)    
+    for y in classes:
+        os.makedirs(f'{dst_folder}/{FSS_ANNO_DIR}/{y}', exist_ok=True)
 
 # ========================= PASCAL_5i =========================
 
@@ -101,10 +101,9 @@ def pascal2fss(data_folder, dst_folder):
 
         # Copy JPEGImages into class folders
         for x in class_id:
-            os.system('cp "{}/{}" "{}/{}"'.format(root_img_path,
+            os.system('cp "{}/{}" "{}"'.format(root_img_path,
                                                   _file.replace('png', 'jpg'),
-                                                  dst_img_path,
-                                                  PASCAL_CLASS[x - 1]))
+                                                  dst_img_path))
 
         # Copy individual masks
         mask = np.array(mask)
@@ -151,6 +150,42 @@ def fss1000tofss(data_folder,
         masks = [x.replace('jpg', 'png') for x in imgs]
         [os.system(f'cp "{x}" "{dst_mask_path}/{_file}"') for x in masks]
 
+############################### Celeb ####################################
+CELEB_CLASS = ['skin', 'nose', 'eye_g', 'l_eye', 'r_eye', \
+               'l_brow', 'r_brow', 'l_ear', 'r_ear', 'mouth', \
+               'u_lip', 'l_lip', 'hair', 'hat', 'ear_r', \
+               'neck_l', 'neck', 'cloth']
+
+CELEB_IMG_DIR = 'CelebA-HQ-img'
+CELEB_MASK_DIR = 'CelebAMask-HQ-mask-anno'
+
+def celeb2fss(data_folder, dst_folder):
+    data_path = Path(data_folder)
+    data_img_path = data_path / CELEB_IMG_DIR
+    data_mask_path = data_path / CELEB_MASK_DIR 
+
+    dst_path = Path(dst_folder)
+    dst_img_path = dst_path / FSS_IMG_DIR
+    dst_mask_path = dst_path / FSS_ANNO_DIR
+
+    
+    create_target_directory(dst_folder, CELEB_CLASS)
+
+    img_files = os.listdir(data_img_path)
+    img_progress_bar = tqdm(img_files)
+    for _file in img_progress_bar:
+        img_progress_bar.set_description_str(_file)
+        [os.system(f'cp "{data_img_path}/{_file}" "{dst_img_path}/"')]
+    print("Done copy JPEGImages folder.")
+    
+    subfolders = os.listdir(data_mask_path)
+    mask_progress_bar = tqdm(subfolders)
+    for folder in mask_progress_bar:
+        mask_progress_bar.set_description_str(folder)
+        #[print(x[6:-4]) for x in os.listdir(data_mask_path / folder)]
+        [os.system(f'cp "{data_mask_path}/{folder}/{x}" "{dst_mask_path}/{x[6:-4]}"') for x in os.listdir(data_mask_path / folder)]
+    print("Done copy Annotations folder.")
+    
 def visualize(root):
     import random
     root = Path(root)
@@ -183,6 +218,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     #pascal2fss(args.data_folder, args.dst_folder)
-    fss1000tofss(args.data_folder, args.dst_folder)
-
+    #fss1000tofss(args.data_folder, args.dst_folder)
+    celeb2fss(args.data_folder, args.dst_folder)
     #visualize(args.dst_folder)
