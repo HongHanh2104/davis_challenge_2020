@@ -237,19 +237,16 @@ def visualize(batch):
     import matplotlib.pyplot as plt
     import numpy as np
 
-    a_img, a_anno, *b_imgs, c_img, nobjects = batch
-    n = len(b_imgs)
+    ref_imgs, ref_masks, q_img = batch
+    k = len(ref_imgs)
 
-    fig, ax = plt.subplots(1, n + 2)
-    ax[0].imshow(a_img[0].cpu().permute(1, 2, 0))
-    ax[0].imshow(a_anno[0].cpu().squeeze(),
-                 vmin=0, vmax=nobjects, alpha=0.5)
-    print(np.unique(a_anno.cpu()))
+    fig, ax = plt.subplots(1, k + 1)
 
-    for i, b_img in enumerate(b_imgs):
-        ax[1+i].imshow(b_img[0].cpu().permute(1, 2, 0))
+    for i, (ref_img, ref_mask) in enumerate(zip(ref_imgs, ref_masks)):
+        ax[i].imshow(ref_img[0].cpu().permute(1, 2, 0))
+        ax[i].imshow(ref_mask[0].cpu().squeeze(0), alpha=0.5)
 
-    ax[n+1].imshow(c_img[0].cpu().permute(1, 2, 0))
+    ax[k].imshow(q_img[0].cpu().permute(1, 2, 0))
 
     fig.tight_layout()
     plt.show()
