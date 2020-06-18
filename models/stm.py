@@ -70,7 +70,8 @@ class Encoder_M(nn.Module):
             [0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def forward(self, in_f, in_m):
-        f = (in_f - self.mean) / self.std
+        #f = (in_f - self.mean) / self.std
+        f = in_f
         
         m = torch.unsqueeze(in_m, dim=1).float()  # add channel dim
 
@@ -103,7 +104,8 @@ class Encoder_Q(nn.Module):
             [0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def forward(self, in_f):
-        f = (in_f - self.mean) / self.std
+        #f = (in_f - self.mean) / self.std
+        f = in_f
 
         x = self.conv1(f)
         x = self.bn1(x)
@@ -127,7 +129,7 @@ class Refine(nn.Module):
     def forward(self, f, pm):
         s = self.ResFS(self.convFS(f))
         m = s + F.interpolate(pm, scale_factor=self.scale_factor,
-                              mode='bilinear', align_corners=True)
+                              mode='bilinear', align_corners=False)
         m = self.ResMM(m)
         return m
 
@@ -152,7 +154,7 @@ class Decoder(nn.Module):
         p2 = self.pred2(F.relu(m2))
 
         p = F.interpolate(p2, scale_factor=4,
-                          mode='bilinear', align_corners=True)
+                          mode='bilinear', align_corners=False)
         return p  # , p2, p3, p4
 
 
@@ -263,7 +265,7 @@ class STMOriginal(nn.Module):
 
     def forward(self, inp):
         # visualize(inp)
-        self.stm.eval()
+        # self.stm.eval()
 
         ref_imgs, ref_masks, q_img = inp
 
@@ -276,6 +278,7 @@ class STMOriginal(nn.Module):
             k = torch.cat([k, nk], dim=3)
             v = torch.cat([v, nv], dim=3)
 
-        logit = self.stm.segment(q_img, k, v)
+        s_logits = [self.stm.segment(ref_img, k, v) for ref_img in ref_imgs]
+        q_logit = self.stm.segment(q_img, k, v)
 
-        return logit
+        return (*s_logits, q_logit)
