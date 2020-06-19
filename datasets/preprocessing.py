@@ -171,19 +171,18 @@ def celeb2fss(data_folder, dst_folder):
     
     create_target_directory(dst_folder, CELEB_CLASS)
 
-    img_files = os.listdir(data_img_path)
-    img_progress_bar = tqdm(img_files)
-    for _file in img_progress_bar:
-        img_progress_bar.set_description_str(_file)
-        [os.system(f'cp "{data_img_path}/{_file}" "{dst_img_path}/"')]
-    print("Done copy JPEGImages folder.")
+    #img_files = os.listdir(data_img_path)
+    #img_progress_bar = tqdm(img_files)
+    #for _file in img_progress_bar:
+    #    img_progress_bar.set_description_str(_file)
+    #    [os.system(f'cp "{data_img_path}/{_file}" "{dst_img_path}/"')]
+    #print("Done copy JPEGImages folder.")
     
-    subfolders = os.listdir(data_mask_path)
-    mask_progress_bar = tqdm(subfolders)
-    for folder in mask_progress_bar:
-        mask_progress_bar.set_description_str(folder)
-        #[print(x[6:-4]) for x in os.listdir(data_mask_path / folder)]
-        [os.system(f'cp "{data_mask_path}/{folder}/{x}" "{dst_mask_path}/{x[6:-4]}"') for x in os.listdir(data_mask_path / folder)]
+    files = glob.glob(f'{data_mask_path}/*/*.png')
+    mask_progress_bar = tqdm(files)
+    for _file in mask_progress_bar:
+        mask_progress_bar.set_description_str(_file)
+        os.system(f'cp "{_file}" "{dst_mask_path}/{os.path.basename(_file)[6:-4]}"')
     print("Done copy Annotations folder.")
     
 def visualize(root):

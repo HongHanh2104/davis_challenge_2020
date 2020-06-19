@@ -68,7 +68,7 @@ class MultiCELoss(nn.Module):
         # visualize(output)
         # print('Truth')
         # visualize(target)
-        w = 1.0 / len(output)
+        w = 1.0 #/ len(output)
         loss = 0.0
         for pred, true in zip(output, target):
             loss += self.loss(pred, true) * w

@@ -49,71 +49,52 @@ class ResBlock(nn.Module):
 
 
 class Encoder_M(nn.Module):
-    def __init__(self):
-        super(Encoder_M, self).__init__()
+    def __init__(self, encoder):
+        super().__init__()
         self.conv1_m = nn.Conv2d(1, 64, kernel_size=7,
                                  stride=2, padding=3, bias=False)
 
-        resnet = models.resnet50(pretrained=True)
-        self.conv1 = resnet.conv1
-        self.bn1 = resnet.bn1
-        self.relu = resnet.relu  # 1/2, 64
-        self.maxpool = resnet.maxpool
+        self.conv1 = encoder.conv1
+        self.bn1 = encoder.bn1
+        self.relu = encoder.relu
+        self.maxpool = encoder.maxpool
 
-        self.res2 = resnet.layer1  # 1/4, 256
-        self.res3 = resnet.layer2  # 1/8, 512
-        self.res4 = resnet.layer3  # 1/8, 1024
+        self.res2 = encoder.layer1
+        self.res3 = encoder.layer2
+        self.res4 = encoder.layer3
 
-        self.register_buffer('mean', torch.FloatTensor(
-            [0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.FloatTensor(
-            [0.229, 0.224, 0.225]).view(1, 3, 1, 1))
-
-    def forward(self, in_f, in_m):
-        #f = (in_f - self.mean) / self.std
-        f = in_f
-        
-        m = torch.unsqueeze(in_m, dim=1).float()  # add channel dim
-
+    def forward(self, f, m):
+        m = m.unsqueeze(1).float()
         x = self.conv1(f) + self.conv1_m(m)
         x = self.bn1(x)
-        c1 = self.relu(x)   # 1/2, 64
-        x = self.maxpool(c1)  # 1/4, 64
-        r2 = self.res2(x)   # 1/4, 256
-        r3 = self.res3(r2)  # 1/8, 512
-        r4 = self.res4(r3)  # 1/8, 1024
+        c1 = self.relu(x)
+        x = self.maxpool(c1)
+        r2 = self.res2(x)
+        r3 = self.res3(r2)
+        r4 = self.res4(r3)
         return r4, r3, r2, c1, f
 
 
 class Encoder_Q(nn.Module):
-    def __init__(self):
-        super(Encoder_Q, self).__init__()
-        resnet = models.resnet50(pretrained=True)
-        self.conv1 = resnet.conv1
-        self.bn1 = resnet.bn1
-        self.relu = resnet.relu  # 1/2, 64
-        self.maxpool = resnet.maxpool
+    def __init__(self, encoder):
+        super().__init__()
+        self.conv1 = encoder.conv1
+        self.bn1 = encoder.bn1
+        self.relu = encoder.relu
+        self.maxpool = encoder.maxpool
 
-        self.res2 = resnet.layer1  # 1/4, 256
-        self.res3 = resnet.layer2  # 1/8, 512
-        self.res4 = resnet.layer3  # 1/8, 1024
+        self.res2 = encoder.layer1
+        self.res3 = encoder.layer2
+        self.res4 = encoder.layer3
 
-        self.register_buffer('mean', torch.FloatTensor(
-            [0.485, 0.456, 0.406]).view(1, 3, 1, 1))
-        self.register_buffer('std', torch.FloatTensor(
-            [0.229, 0.224, 0.225]).view(1, 3, 1, 1))
-
-    def forward(self, in_f):
-        #f = (in_f - self.mean) / self.std
-        f = in_f
-
+    def forward(self, f):
         x = self.conv1(f)
         x = self.bn1(x)
-        c1 = self.relu(x)   # 1/2, 64
-        x = self.maxpool(c1)  # 1/4, 64
-        r2 = self.res2(x)   # 1/4, 256
-        r3 = self.res3(r2)  # 1/8, 512
-        r4 = self.res4(r3)  # 1/8, 1024
+        c1 = self.relu(x)
+        x = self.maxpool(c1)
+        r2 = self.res2(x)
+        r3 = self.res3(r2)
+        r4 = self.res4(r3)
         return r4, r3, r2, c1, f
 
 
@@ -140,8 +121,8 @@ class Decoder(nn.Module):
         self.convFM = nn.Conv2d(1024, mdim, 
                                 kernel_size=3, padding=1, stride=1)
         self.ResMM = ResBlock(mdim, mdim)
-        self.RF3 = Refine(512, mdim)  # 1/8 -> 1/4
-        self.RF2 = Refine(256, mdim)  # 1/4 -> 1
+        self.RF3 = Refine(512, mdim)
+        self.RF2 = Refine(256, mdim)
 
         self.pred2 = nn.Conv2d(mdim, 2, 
                                kernel_size=3, padding=1, stride=1)
@@ -162,27 +143,28 @@ class Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
 
-    def forward(self, m_in, m_out, q_in, q_out):  # m_in: o,c,t,h,w
-        B, D_e, Hi, Wi = m_in.size()
-        _,   _, Ho, Wo = q_in.size()
-        _, D_o,  _,  _ = m_out.size()
+    def forward(self, m_k, m_v, q_k, q_v):
+        # m_k: B, D
+        B, Dk, Hm, Wm = m_k.size()
+        _,  _, Hq, Wq = q_k.size()
+        _, Dv,  _,  _ = m_v.size()
 
-        mi = m_in.reshape(B, D_e, Hi*Wi)
-        mi = torch.transpose(mi, 1, 2)  # b, THW, emb
+        mk = m_k.reshape(B, Dk, Hm*Wm) # mk: 
+        mk = torch.transpose(mk, 1, 2)
 
-        qi = q_in.reshape(B, D_e, Ho*Wo)  # b, emb, HW
+        qk = q_k.reshape(B, Dk, Hq*Wq)
 
-        p = torch.bmm(mi, qi)  # b, THW, HW
-        p = p / math.sqrt(D_e)
-        p = F.softmax(p, dim=1)  # b, THW, HW
+        p = torch.bmm(mk, qk)
+        p = p / math.sqrt(Dk)
+        p = F.softmax(p, dim=1)
 
-        mo = m_out.reshape(B, D_o, Hi*Wi)
-        mem = torch.bmm(mo, p)  # Weighted-sum B, D_o, HW
-        mem = mem.reshape(B, D_o, Ho, Wo)
+        mv = m_v.reshape(B, Dv, Hm*Wm)
+        mem = torch.bmm(mv, p)
+        mem = mem.reshape(B, Dv, Hq, Wq)
 
-        mem_out = torch.cat([mem, q_out], dim=1)
+        out = torch.cat([mem, q_v], dim=1)
 
-        return mem_out, p
+        return out, p
 
 
 class KeyValue(nn.Module):
@@ -200,8 +182,12 @@ class KeyValue(nn.Module):
 class STM(nn.Module):
     def __init__(self):
         super(STM, self).__init__()
-        self.Encoder_M = Encoder_M()
-        self.Encoder_Q = Encoder_Q()
+        self.backbone = models.resnet50(pretrained=True)
+        for p in self.backbone.parameters():
+            p.requires_grad = False
+
+        self.Encoder_M = Encoder_M(self.backbone)
+        self.Encoder_Q = Encoder_Q(self.backbone)
 
         self.KV_M_r4 = KeyValue(1024, keydim=128, valdim=512)
         self.KV_Q_r4 = KeyValue(1024, keydim=128, valdim=512)
@@ -210,17 +196,22 @@ class STM(nn.Module):
         self.Decoder = Decoder(256)
 
     def memorize(self, frame, mask):
+        # frame: B, C, H, W
+        # mask: B, H, W
         r4, _, _, _, _ = self.Encoder_M(frame, mask)
+        # r4: B, D, H/16, W/16
         k4, v4 = self.KV_M_r4(r4)
+        # k4: B, Dk, H/16, W/16
+        # v4: B, Dk, H/16, W/16
         return k4, v4
 
     def segment(self, frame, keys, values):
-        _, _, H, W = keys.shape  # B = 1
+        _, _, H, W = keys.shape
         [frame], pad = pad_divide_by([frame], 16, 
                                      (frame.size(2), frame.size(3)))
 
         r4, r3, r2, _, _ = self.Encoder_Q(frame)
-        k4, v4 = self.KV_Q_r4(r4)   # 1, dim, H/16, W/16
+        k4, v4 = self.KV_Q_r4(r4)
         m4, viz = self.Memory(keys, values, k4, v4)
 
         logit = self.Decoder(m4, r3, r2)

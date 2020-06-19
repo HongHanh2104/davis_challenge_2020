@@ -1,4 +1,4 @@
-id: STM-FSS
+id: FSS-STM-PASCAL0
 pretrained: null #backup/STM-YVOS-WarmUp2/best_metric_ModifiedMeanIoU.pth
 seed: 3698
 model:
@@ -7,15 +7,16 @@ model:
 optimizer:
     name: SGD
     args:
-        lr: 0.0001
+        lr: 0.0025
         momentum: 0.9
         nesterov: True
 loss:
-    name: CrossEntropyLoss
+    name: MultiCELoss
 metric:
-    - name: MeanIoU
+    - name: ModifiedMeanIoU
       args:
           nclasses: 2
+          ignore_index: 0
 scheduler:
     name: ReduceLROnPlateau
     args:
@@ -29,7 +30,8 @@ dataset:
         args:
             root: data/PASCAL-5i
             phase: 0_train
-            n: 100
+            n: 100 # FSS: 64, PASCAL: 3200
+            is_train: True
         loader:
             name: DataLoader
             args:

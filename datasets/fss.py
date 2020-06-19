@@ -11,6 +11,10 @@ from pathlib import Path
 import random
 import os
 
+from transforms.crop import MultiRandomCrop
+from transforms.affine import MultiRandomAffine
+from transforms.resize import MultiRandomResize
+
 FSS_IMG_DIR = "JPEGImages"
 FSS_ANNO_DIR = "Annotations"
 FSS_IMGSETS_DIR = "ImageSets"
@@ -42,10 +46,10 @@ class FSSCoreDataset(data.Dataset):
     def _load_frame(self, img_name, augmentation):
         # Load annotated mask
         anno_path = os.path.join(self.anno_dir, img_name)
-        mask = Image.open(anno_path).convert('P')
+        mask = Image.open(anno_path).convert('L')
 
         # Load frame image
-        jpeg_path = anno_path.replace(self.anno_dir, self.img_dir)
+        jpeg_path = os.path.join(self.img_dir, os.path.basename(anno_path)) #anno_path.replace(self.anno_dir, self.img_dir)
         jpeg_path = jpeg_path.replace('.png', '.jpg')
         img = Image.open(jpeg_path).convert('RGB')
 
@@ -55,15 +59,41 @@ class FSSCoreDataset(data.Dataset):
 
         # Convert to tensor
         img = tvtf.ToTensor()(img)
-        mask = torch.LongTensor(np.array(mask))
+        img = tvtf.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225])(img)
+        mask = torch.LongTensor(np.array(mask) > 0)
 
         return img, mask
+    
+    def _filter_small_objs(self, mask, thres):
+        # Filter small objects
+        ori_objs = np.unique(mask)
+        for obj in ori_objs:
+            area = (mask == obj).sum().item()
+            if area < thres:
+                mask[mask == obj] = 0
+        return mask
+
+    def _filter_excessive_objs(self, masks):
+        # Filter excessive objects
+        ori_objs = np.unique(masks[0])
+        for i in range(1, len(masks)):
+            mask_objs = np.unique(masks[i])
+            excess_objs = np.setdiff1d(mask_objs, ori_objs)
+            for obj in excess_objs:
+                masks[i][masks[i] == obj] = 0
+        return masks
+
+    def _filter(self, masks, small_obj_thres=5000):
+        #masks[0] = self._filter_small_objs(masks[0], small_obj_thres)
+        #masks = self._filter_excessive_objs(masks)
+        return masks
 
     def _augmentation(self, img, mask):
-        # img, mask = MultiRandomResize(resize_value=384)((img, mask))
-        # img = tvtf.Resize(384)(img)
-        # mask = tvtf.Resize(384, 0)(mask)
-        # img, mask = MultiRandomCrop(size=384)((img, mask))
+        #img, mask = MultiRandomResize(resize_value=384)((img, mask))
+        #img = tvtf.Resize(321)(img)
+        #mask = tvtf.Resize(321, 0)(mask)
+        #img, mask = MultiRandomCrop(size=384)((img, mask))
         # img, mask = MultiRandomAffine(degrees=(-15, 15),
                                     #   scale=(0.95, 1.05),
                                     #   shear=(-10, 10))((img, mask))
@@ -110,11 +140,16 @@ class FSSDataset(FSSCoreDataset):
 
 
 class FSSRandomDataset(FSSCoreDataset):
+    count = 0
+
     def __init__(self, n=1, **kwargs):
         super().__init__(**kwargs)
 
         self.n = n
         self.classes = self.classes * self.n
+
+        self.history = open(f'{FSSRandomDataset.count}.txt', 'w')
+        FSSRandomDataset.count += 1
 
     def __getitem__(self, idx):
         class_id = self.classes[idx]
@@ -125,16 +160,24 @@ class FSSRandomDataset(FSSCoreDataset):
         anno_ref_names = [os.path.join(class_id, x)
                           for x in imgs[:-1]]
 
+        self.history.write(f'{anno_query_name},{",".join(anno_ref_names)}\n')
+
+        query_img, query_mask = self._load_frame(anno_query_name,
+                                                 self._augmentation)
+
         ref_imgs, ref_masks = [], []
         for anno_ref_name in anno_ref_names:
             ref_img, ref_mask = self._load_frame(anno_ref_name,
                                                  self._augmentation)
+
+            if self.is_train:
+                ref_mask, query_mask = self._filter([ref_mask, query_mask])
+                if ref_mask.max() == 0:
+                    return self.__getitem__(idx)
             ref_imgs.append(ref_img)
             ref_masks.append(ref_mask)
-        query_img, query_mask = self._load_frame(anno_query_name,
-                                                 self._augmentation)
 
-        return (ref_imgs, ref_masks, query_img), query_mask
+        return (ref_imgs, ref_masks, query_img), (*ref_masks, query_mask)
 
     def __len__(self):
         return len(self.classes)
