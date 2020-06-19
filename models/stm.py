@@ -6,45 +6,35 @@ from torchvision import models
 import math
 
 
-def pad_divide_by(in_list, d, in_size):
-    out_list = []
-    h, w = in_size
+def get_pad_array(size, d):
+    h, w = size
+    dh, dw = 0, 0
     if h % d > 0:
-        new_h = h + d - h % d
-    else:
-        new_h = h
+        dh = d - h % d
     if w % d > 0:
-        new_w = w + d - w % d
-    else:
-        new_w = w
-    lh, uh = int((new_h-h) / 2), int(new_h-h) - int((new_h-h) / 2)
-    lw, uw = int((new_w-w) / 2), int(new_w-w) - int((new_w-w) / 2)
-    pad_array = (int(lw), int(uw), int(lh), int(uh))
-    for inp in in_list:
-        out_list.append(F.pad(inp, pad_array))
-    return out_list, pad_array
+        dw = d - w % d
+    top, bottom = dh // 2, dh - dh // 2
+    left, right = dw // 2, dw - dw // 2
+    return (left, right, top, bottom)
+
+
+def pad_divide_by(inp, d):
+    pad_array = get_pad_array(inp.shape[-2:], d)
+    padded = F.pad(inp, pad_array)
+    return padded, pad_array
 
 
 class ResBlock(nn.Module):
-    def __init__(self, indim, outdim=None, stride=1):
-        super(ResBlock, self).__init__()
-        if outdim == None:
-            outdim = indim
-        if indim == outdim and stride == 1:
-            self.downsample = nn.Identity()
-        else:
-            self.downsample = nn.Conv2d(indim, outdim, 
-                                        kernel_size=3, padding=1, stride=stride)
-
-        self.conv1 = nn.Conv2d(indim, outdim, 
-                               kernel_size=3, padding=1, stride=stride)
-        self.conv2 = nn.Conv2d(outdim, outdim, 
+    def __init__(self, indim, outdim):
+        super().__init__()
+        self.conv1 = nn.Conv2d(indim, outdim,
+                               kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(outdim, outdim,
                                kernel_size=3, padding=1)
 
     def forward(self, x):
         r = self.conv1(F.relu(x))
         r = self.conv2(F.relu(r))
-        x = self.downsample(x)
         return x + r
 
 
@@ -64,14 +54,16 @@ class Encoder_M(nn.Module):
         self.res4 = encoder.layer3
 
     def forward(self, f, m):
-        m = m.unsqueeze(1).float()
-        x = self.conv1(f) + self.conv1_m(m)
-        x = self.bn1(x)
-        c1 = self.relu(x)
-        x = self.maxpool(c1)
-        r2 = self.res2(x)
-        r3 = self.res3(r2)
-        r4 = self.res4(r3)
+        # f: B, C, H, W
+        # m: B, H, W
+        m = m.unsqueeze(1).float()  # m: B, 1, H, W
+        x = self.conv1(f) + self.conv1_m(m)  # x: B, D/8, H/2, W/2
+        x = self.bn1(x)  # x: B, D/8, H/2, W/2
+        c1 = self.relu(x)  # c1: B, D/8, H/2, W/2
+        x = self.maxpool(c1)  # x: B, D/8, H/4, W/4
+        r2 = self.res2(x)  # r2: B, D/4, H/4, W/4
+        r3 = self.res3(r2)  # r3: B, D/2, H/8, W/8
+        r4 = self.res4(r3)  # r4: B, D, H/16, W/16
         return r4, r3, r2, c1, f
 
 
@@ -88,54 +80,68 @@ class Encoder_Q(nn.Module):
         self.res4 = encoder.layer3
 
     def forward(self, f):
-        x = self.conv1(f)
-        x = self.bn1(x)
-        c1 = self.relu(x)
-        x = self.maxpool(c1)
-        r2 = self.res2(x)
-        r3 = self.res3(r2)
-        r4 = self.res4(r3)
+        # f: B, C, H, W
+        x = self.conv1(f)  # x: B, D/8, H/2, W/2
+        x = self.bn1(x)  # x: B, D/8, H/2, W/2
+        c1 = self.relu(x)  # c1: B, D/8, H/2, W/2
+        x = self.maxpool(c1)  # x: B, D/8, H/4, W/4
+        r2 = self.res2(x)  # r2: B, D/4, H/4, W/4
+        r3 = self.res3(r2)  # r3: B, D/2, H/8, W/8
+        r4 = self.res4(r3)  # r4: B, D, H/16, W/16
         return r4, r3, r2, c1, f
 
 
 class Refine(nn.Module):
     def __init__(self, inplanes, planes, scale_factor=2):
         super(Refine, self).__init__()
-        self.convFS = nn.Conv2d(inplanes, planes, 
+        self.convFS = nn.Conv2d(inplanes, planes,
                                 kernel_size=3, padding=1, stride=1)
         self.ResFS = ResBlock(planes, planes)
         self.ResMM = ResBlock(planes, planes)
         self.scale_factor = scale_factor
 
     def forward(self, f, pm):
-        s = self.ResFS(self.convFS(f))
-        m = s + F.interpolate(pm, scale_factor=self.scale_factor,
-                              mode='bilinear', align_corners=False)
-        m = self.ResMM(m)
+        # I = inplanes, O = planes, S = scale factor
+        # f: B, I, H*S, W*S
+        # pm: B, O, H, W
+        s = self.convFS(f)  # s: B, O, HS, WS
+        s = self.ResFS(s)  # s: B, O, HS, WS
+        pm = F.interpolate(pm, scale_factor=self.scale_factor,
+                           mode='bilinear', align_corners=False)
+        # pm: B, O, HS, WS
+        m = s + pm  # m: B, O, HS, WS
+        m = self.ResMM(m)  # m: B, O, HS, WS
         return m
 
 
 class Decoder(nn.Module):
     def __init__(self, mdim):
         super(Decoder, self).__init__()
-        self.convFM = nn.Conv2d(1024, mdim, 
+        self.convFM = nn.Conv2d(1024, mdim,
                                 kernel_size=3, padding=1, stride=1)
         self.ResMM = ResBlock(mdim, mdim)
         self.RF3 = Refine(512, mdim)
         self.RF2 = Refine(256, mdim)
 
-        self.pred2 = nn.Conv2d(mdim, 2, 
+        self.pred2 = nn.Conv2d(mdim, 2,
                                kernel_size=3, padding=1, stride=1)
 
     def forward(self, r4, r3, r2):
-        m4 = self.ResMM(self.convFM(r4))
-        m3 = self.RF3(r3, m4)  # out: 1/8, 256
-        m2 = self.RF2(r2, m3)  # out: 1/4, 256
+        # r2: B, D/4, H/4, W/4
+        # r3: B, D/2, H/8, W/8
+        # r4: B, D, H/16, W/16
 
-        p2 = self.pred2(F.relu(m2))
+        m4 = self.convFM(r4)  # m4: B, D/4, H/16, W/16
+        m4 = self.ResMM(m4)  # m4: B, D/4, H/16, W/16
+        m3 = self.RF3(r3, m4)  # m3: B, D/4, H/8, W/8
+        m2 = self.RF2(r2, m3)  # m2: B, D/4, H/4, W/4
+
+        p2 = F.relu(m2)  # p2: B, D/4, H/4, W/4
+        p2 = self.pred2(p2)  # p2: B, N, H/4, W/4
 
         p = F.interpolate(p2, scale_factor=4,
                           mode='bilinear', align_corners=False)
+        # p: B, N, H, W
         return p  # , p2, p3, p4
 
 
@@ -143,28 +149,29 @@ class Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
 
-    def forward(self, m_k, m_v, q_k, q_v):
-        # m_k: B, D
+    def forward(self, m_k, m_v, q_k):
+        # m_k: B, Dk, Hm, Wm
+        # m_v: B, Dv, Hm, Wm
+        # q_k: B, Dk, Hq, Wq
+
         B, Dk, Hm, Wm = m_k.size()
         _,  _, Hq, Wq = q_k.size()
         _, Dv,  _,  _ = m_v.size()
 
-        mk = m_k.reshape(B, Dk, Hm*Wm) # mk: 
-        mk = torch.transpose(mk, 1, 2)
+        mk = m_k.reshape(B, Dk, Hm*Wm)  # mk: B, Dk, Hm*Wm
+        mk = torch.transpose(mk, 1, 2)  # mk: B, Hm*Wm, Dk
 
-        qk = q_k.reshape(B, Dk, Hq*Wq)
+        qk = q_k.reshape(B, Dk, Hq*Wq)  # qk: B, Dk, Hq*Wq
 
-        p = torch.bmm(mk, qk)
-        p = p / math.sqrt(Dk)
-        p = F.softmax(p, dim=1)
+        p = torch.bmm(mk, qk)  # p: B, Hm*Wm, Hq*Wq
+        p = p / math.sqrt(Dk)  # p: B, Hm*Wm, Hq*Wq
+        p = F.softmax(p, dim=1)  # p: B, Hm*Wm, Hq*Wq
 
-        mv = m_v.reshape(B, Dv, Hm*Wm)
-        mem = torch.bmm(mv, p)
-        mem = mem.reshape(B, Dv, Hq, Wq)
+        mv = m_v.reshape(B, Dv, Hm*Wm)  # mv: B, Dv, Hm*Wm
+        mem = torch.bmm(mv, p)  # B, Dv, Hq*Wq
+        mem = mem.reshape(B, Dv, Hq, Wq)  # B, Dv, Hq, Wq
 
-        out = torch.cat([mem, q_v], dim=1)
-
-        return out, p
+        return mem, p
 
 
 class KeyValue(nn.Module):
@@ -173,10 +180,13 @@ class KeyValue(nn.Module):
         self.Key = nn.Conv2d(indim, keydim,
                              kernel_size=3, padding=1, stride=1)
         self.Value = nn.Conv2d(indim, valdim,
-                                kernel_size=3, padding=1, stride=1)
+                               kernel_size=3, padding=1, stride=1)
 
     def forward(self, x):
-        return self.Key(x), self.Value(x)
+        # x: B, D, H/16, W/16
+        k = self.Key(x)  # k: B, K, H/16, W/16
+        v = self.Value(x)  # v: B, V, H/16, W/16
+        return k, v
 
 
 class STM(nn.Module):
@@ -202,24 +212,41 @@ class STM(nn.Module):
         # r4: B, D, H/16, W/16
         k4, v4 = self.KV_M_r4(r4)
         # k4: B, Dk, H/16, W/16
-        # v4: B, Dk, H/16, W/16
+        # v4: B, Dv, H/16, W/16
         return k4, v4
 
     def segment(self, frame, keys, values):
-        _, _, H, W = keys.shape
-        [frame], pad = pad_divide_by([frame], 16, 
-                                     (frame.size(2), frame.size(3)))
+        # frame: B, C, H, W
+        # keys: B, Dk, Hm, Wm
+        # values: B, Dv, Hm, Wm
 
+        # Pad frame for consistent rescaling
+        frame, pad = pad_divide_by(frame, 16)
+        # frame: B, C, H, W (padded)
+
+        # Encode query frame as a (key, value) pair
         r4, r3, r2, _, _ = self.Encoder_Q(frame)
+        # r2: B, D/4, H/4, W/4
+        # r3: B, D/2, H/8, W/8
+        # r4: B, D, H/16, W/16
         k4, v4 = self.KV_Q_r4(r4)
-        m4, viz = self.Memory(keys, values, k4, v4)
+        # k4: B, Dk, H/16, W/16
+        # v4: B, Dv, H/16, W/16
 
+        # Read from memory
+        mem, _ = self.Memory(keys, values, k4)
+        m4 = torch.cat([mem, v4], dim=1)
+        # m4: B, D, H/16, W/16
+
+        # Decode
         logit = self.Decoder(m4, r3, r2)
+        # logit: B, N, H, W
 
-        if pad[2]+pad[3] > 0:
+        if pad[2] + pad[3] > 0:
             logit = logit[:, :, pad[2]:-pad[3], :]
-        if pad[0]+pad[1] > 0:
+        if pad[0] + pad[1] > 0:
             logit = logit[:, :, :, pad[0]:-pad[1]]
+        # logit: B, N, H, W (original)
 
         return logit
 
@@ -250,6 +277,7 @@ class STMOriginal(nn.Module):
         stm = nn.DataParallel(STM())
         # stm.load_state_dict(torch.load('STM_weights.pth'))
         self.stm = stm.module
+        self.load_state_dict(torch.load('backup/stm_best.pth'))
 
     def forward(self, inp):
         # visualize(inp)
