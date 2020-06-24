@@ -190,14 +190,11 @@ class KeyValue(nn.Module):
 
 
 class STM(nn.Module):
-    def __init__(self):
-        super(STM, self).__init__()
-        self.backbone = models.resnet50(pretrained=True)
-        for p in self.backbone.parameters():
-            p.requires_grad = False
+    def __init__(self, backbone):
+        super().__init__()
 
-        self.Encoder_M = Encoder_M(self.backbone)
-        self.Encoder_Q = Encoder_Q(self.backbone)
+        self.Encoder_M = Encoder_M(backbone)
+        self.Encoder_Q = Encoder_Q(backbone)
 
         self.KV_M_r4 = KeyValue(1024, keydim=128, valdim=512)
         self.KV_Q_r4 = KeyValue(1024, keydim=128, valdim=512)
@@ -274,10 +271,10 @@ def visualize(batch):
 class STMOriginal(nn.Module):
     def __init__(self):
         super().__init__()
-        stm = nn.DataParallel(STM())
-        # stm.load_state_dict(torch.load('STM_weights.pth'))
-        self.stm = stm.module
-        self.load_state_dict(torch.load('backup/stm_best.pth'))
+        self.backbone = models.resnet50(pretrained=True)
+        for p in self.backbone.parameters():
+            p.requires_grad = False
+        self.stm = STM(self.backbone)
 
     def forward(self, inp):
         # visualize(inp)
@@ -298,3 +295,6 @@ class STMOriginal(nn.Module):
         q_logit = self.stm.segment(q_img, k, v)
 
         return (*s_logits, q_logit)
+
+    def predict(self, inp):
+        return self.forward(inp)[-1]
