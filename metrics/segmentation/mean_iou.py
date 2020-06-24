@@ -2,8 +2,6 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from utils.segmentation import multi_class_prediction, binary_prediction
-
 
 class MeanIoU():
     def __init__(self, nclasses, ignore_index=None, eps=1e-9):
