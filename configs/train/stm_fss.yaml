@@ -11,11 +11,11 @@ optimizer:
         momentum: 0.9
         nesterov: True
 loss:
-    name: MultiCELoss
+    name: FSSCELoss
 metric:
-    - name: ModifiedMeanIoU
+    - name: FSSMeanIoU
       args:
-          nclasses: 2
+          nclasses: 5
           ignore_index: 0
 scheduler:
     name: ReduceLROnPlateau
@@ -35,7 +35,7 @@ dataset:
         loader:
             name: DataLoader
             args:
-                batch_size: 1
+                batch_size: 4
                 shuffle: True
     val:
         name: FSSRandomDataset
@@ -46,7 +46,7 @@ dataset:
         loader:
             name: DataLoader
             args:
-                batch_size: 1
+                batch_size: 16
 trainer:
     nepochs: 50
     val_step: 1
