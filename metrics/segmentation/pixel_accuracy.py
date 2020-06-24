@@ -1,7 +1,5 @@
 import torch
 
-from utils.segmentation import multi_class_prediction, binary_prediction
-
 
 class PixelAccuracy():
     def __init__(self, nclasses, ignore_index=None):

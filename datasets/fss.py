@@ -91,8 +91,8 @@ class FSSCoreDataset(data.Dataset):
 
     def _augmentation(self, img, mask):
         # img, mask = MultiRandomResize(resize_value=321)((img, mask))
-        # img = tvtf.Resize((224, 224))(img)
-        # mask = tvtf.Resize((224, 224), 0)(mask)
+        img = tvtf.Resize((320, 320))(img)
+        mask = tvtf.Resize((320, 320), 0)(mask)
         # img, mask = MultiRandomCrop(size=321)((img, mask))
         # img, mask = MultiRandomAffine(degrees=(-15, 15),
         #   scale=(0.95, 1.05),

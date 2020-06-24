@@ -1,8 +1,6 @@
 import torch
 import torch.nn.functional as F
 
-from utils.segmentation import multi_class_prediction, binary_prediction
-
 
 class DiceScore():
     def __init__(self, nclasses, ignore_index=None, eps=1e-6):
