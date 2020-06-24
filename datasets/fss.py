@@ -49,7 +49,7 @@ class FSSCoreDataset(data.Dataset):
         mask = Image.open(anno_path).convert('L')
 
         # Load frame image
-        jpeg_path = os.path.join(self.img_dir, os.path.basename(anno_path)) #anno_path.replace(self.anno_dir, self.img_dir)
+        jpeg_path = os.path.join(self.img_dir, os.path.basename(anno_path))
         jpeg_path = jpeg_path.replace('.png', '.jpg')
         img = Image.open(jpeg_path).convert('RGB')
 
@@ -64,7 +64,7 @@ class FSSCoreDataset(data.Dataset):
         mask = torch.LongTensor(np.array(mask) > 0)
 
         return img, mask
-    
+
     def _filter_small_objs(self, mask, thres):
         # Filter small objects
         ori_objs = np.unique(mask)
@@ -90,13 +90,13 @@ class FSSCoreDataset(data.Dataset):
         return masks
 
     def _augmentation(self, img, mask):
-        #img, mask = MultiRandomResize(resize_value=384)((img, mask))
-        #img = tvtf.Resize(321)(img)
-        #mask = tvtf.Resize(321, 0)(mask)
-        #img, mask = MultiRandomCrop(size=384)((img, mask))
+        # img, mask = MultiRandomResize(resize_value=321)((img, mask))
+        # img = tvtf.Resize((224, 224))(img)
+        # mask = tvtf.Resize((224, 224), 0)(mask)
+        # img, mask = MultiRandomCrop(size=321)((img, mask))
         # img, mask = MultiRandomAffine(degrees=(-15, 15),
-                                    #   scale=(0.95, 1.05),
-                                    #   shear=(-10, 10))((img, mask))
+        #   scale=(0.95, 1.05),
+        #   shear=(-10, 10))((img, mask))
         return img, mask
 
 
@@ -177,7 +177,8 @@ class FSSRandomDataset(FSSCoreDataset):
             ref_imgs.append(ref_img)
             ref_masks.append(ref_mask)
 
-        return (ref_imgs, ref_masks, query_img), (*ref_masks, query_mask)
+        return (ref_imgs, ref_masks, query_img), \
+            (self.classes.index(class_id) + 1, (*ref_masks, query_mask))
 
     def __len__(self):
         return len(self.classes)
