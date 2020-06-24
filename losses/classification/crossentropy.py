@@ -30,45 +30,13 @@ class CrossEntropyLoss(nn.CrossEntropyLoss):
         super().__init__(weight, **kwargs)
 
 
-def visualize(batch):
-    import matplotlib.pyplot as plt
-    *b_annos, c_anno = batch
-    n = len(b_annos)
-
-    if len(c_anno.shape) == 4:
-        c_anno = torch.argmax(c_anno, dim=1)
-
-    fig, ax = plt.subplots(1, n + 1)
-
-    for i, b_anno in enumerate(b_annos):
-        if len(b_anno.shape) == 4:
-            b_anno = torch.argmax(b_anno, dim=1)
-        ax[i].imshow(b_anno[0].cpu().squeeze(),
-                     vmin=0, vmax=11)
-
-    if n == 0:
-        ax.imshow(c_anno[0].cpu().squeeze(),
-                  vmin=0, vmax=11)
-    else:
-        ax[n].imshow(c_anno[0].cpu().squeeze(),
-                     vmin=0, vmax=11)
-
-    fig.tight_layout()
-    plt.show()
-    plt.close()
-
-
 class MultiCELoss(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
         self.loss = CrossEntropyLoss(**kwargs)
 
     def forward(self, output, target):
-        # print('Pred')
-        # visualize(output)
-        # print('Truth')
-        # visualize(target)
-        w = 1.0 #/ len(output)
+        w = 1.0
         loss = 0.0
         for pred, true in zip(output, target):
             loss += self.loss(pred, true) * w
