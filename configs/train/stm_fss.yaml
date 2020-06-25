@@ -1,5 +1,5 @@
 id: FSS-STM-PASCAL0
-pretrained: null #backup/STM-YVOS-WarmUp2/best_metric_ModifiedMeanIoU.pth
+pretrained: null #runs/FSS-STM-PASCAL0-2020_06_25-12_56_56/best_metric_FSSMeanIoU.pth
 seed: 3698
 model:
     name: STMOriginal
@@ -7,8 +7,9 @@ model:
 optimizer:
     name: SGD
     args:
-        lr: 0.0025
+        lr: 0.0001
         momentum: 0.9
+        weight_decay: 0.0005
         nesterov: True
 loss:
     name: FSSCELoss
@@ -26,27 +27,32 @@ scheduler:
         verbose: True
 dataset:
     train:
-        name: FSSRandomDataset
+        name: FSS_Dataset
         args:
-            root: data/PASCAL-5i
-            phase: 0_train
-            n: 100 # FSS: 64, PASCAL: 3200
-            is_train: True
-        loader:
-            name: DataLoader
-            args:
-                batch_size: 4
-                shuffle: True
-    val:
-        name: FSSRandomDataset
-        args:
-            root: data/PASCAL-5i
-            phase: 0_val
-            n: 500
+            data_dir: ../crnet_simple/data/VOC2012
+            fold: 0
+            #root: data/PASCAL-5i
+            #phase: 0_train
+            #n: 500 # FSS: 64, PASCAL: 3200
+            #is_train: True
         loader:
             name: DataLoader
             args:
                 batch_size: 16
+                shuffle: True
+    val:
+        name: FSS_ValDataset
+        args:
+            data_dir: ../crnet_simple/data/VOC2012
+            fold: 0
+            #root: data/PASCAL-5i
+            #phase: 0_val
+            #n: 500
+            #is_train: False
+        loader:
+            name: DataLoader
+            args:
+                batch_size: 1
 trainer:
     nepochs: 50
     val_step: 1

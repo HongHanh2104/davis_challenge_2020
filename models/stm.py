@@ -124,7 +124,7 @@ class Decoder(nn.Module):
         self.RF2 = Refine(256, mdim)
 
         self.pred2 = nn.Conv2d(mdim, 2,
-                               kernel_size=3, padding=1, stride=1)
+                               kernel_size=1, padding=0, stride=1)
 
     def forward(self, r4, r3, r2):
         # r2: B, D/4, H/4, W/4
@@ -144,8 +144,38 @@ class Decoder(nn.Module):
         # p: B, N, H, W
         return p  # , p2, p3, p4
 
-
 class Memory(nn.Module):
+    def __init__(self):
+        super(Memory, self).__init__()
+        self.attn = nn.MultiheadAttention(512, 4)
+
+    def forward(self, m_k, m_v, q_k):
+        # m_k: B, Dk, Hm, Wm
+        # m_v: B, Dv, Hm, Wm
+        # q_k: B, Dk, Hq, Wq
+
+        B, Dk, Hm, Wm = m_k.size()
+        _,  _, Hq, Wq = q_k.size()
+        _, Dv,  _,  _ = m_v.size()
+
+        mk = m_k.reshape(B, Dk, Hm*Wm)  # mk: B, D, Hm*Wm
+        mk = mk.permute(2, 0, 1)  # mk: Hm*Wm, B, D
+
+        qk = q_k.reshape(B, Dk, Hq*Wq)  # qk: B, D, Hq*Wq
+        qk = qk.permute(2, 0, 1) # qk: Hq*Wq, B, D
+
+        mv = m_v.reshape(B, Dv, Hm*Wm)  # mv: B, D, Hm*Wm
+        mv = mv.permute(2, 0, 1) # mv: Hm*Wm, D, B
+
+        mem, p = self.attn(qk, mk, mv) 
+        # mem: Hq*Wq, B, D
+        # p: B, Hq*Wq, Hm*Wm
+        mem = mem.permute(1, 2, 0) # mem: B, D, Hq*Wq
+        mem = mem.reshape(B, Dk, Hq, Wq)
+
+        return mem, p
+
+class _Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
 
@@ -173,6 +203,29 @@ class Memory(nn.Module):
 
         return mem, p
 
+def positionalencoding2d(d_model, height, width):
+    """
+    :param d_model: dimension of the model
+    :param height: height of the positions
+    :param width: width of the positions
+    :return: d_model*height*width position matrix
+    """
+    if d_model % 4 != 0:
+        raise ValueError("Cannot use sin/cos positional encoding with "
+                         "odd dimension (got dim={:d})".format(d_model))
+    pe = torch.zeros(d_model, height, width)
+    # Each dimension use half of d_model
+    d_model = int(d_model / 2)
+    div_term = torch.exp(torch.arange(0., d_model, 2) *
+                         -(math.log(10000.0) / d_model))
+    pos_w = torch.arange(0., width).unsqueeze(1)
+    pos_h = torch.arange(0., height).unsqueeze(1)
+    pe[0:d_model:2, :, :] = torch.sin(pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, height, 1)
+    pe[1:d_model:2, :, :] = torch.cos(pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, height, 1)
+    pe[d_model::2, :, :] = torch.sin(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
+    pe[d_model + 1::2, :, :] = torch.cos(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
+
+    return pe
 
 class KeyValue(nn.Module):
     def __init__(self, indim, keydim, valdim):
@@ -183,6 +236,9 @@ class KeyValue(nn.Module):
                                kernel_size=3, padding=1, stride=1)
 
     def forward(self, x):
+        with torch.no_grad():
+            pe = positionalencoding2d(*x.shape[-3:]).to(x.device)
+            x = x + pe
         # x: B, D, H/16, W/16
         k = self.Key(x)  # k: B, K, H/16, W/16
         v = self.Value(x)  # v: B, V, H/16, W/16
@@ -190,14 +246,19 @@ class KeyValue(nn.Module):
 
 
 class STM(nn.Module):
-    def __init__(self, backbone):
-        super().__init__()
+    def __init__(self):
+        super(STM, self).__init__()
+        self.backbone_M = models.resnet50(pretrained=True)
+        self.backbone_Q = models.resnet50(pretrained=True)
 
-        self.Encoder_M = Encoder_M(backbone)
-        self.Encoder_Q = Encoder_Q(backbone)
+        #for p in self.backbone.parameters():
+        #    p.requires_grad = False
 
-        self.KV_M_r4 = KeyValue(1024, keydim=128, valdim=512)
-        self.KV_Q_r4 = KeyValue(1024, keydim=128, valdim=512)
+        self.Encoder_M = Encoder_M(self.backbone_M)
+        self.Encoder_Q = Encoder_Q(self.backbone_Q)
+
+        self.KV_M_r4 = KeyValue(1024, keydim=512, valdim=512)
+        self.KV_Q_r4 = KeyValue(1024, keydim=512, valdim=512)
 
         self.Memory = Memory()
         self.Decoder = Decoder(256)
@@ -271,10 +332,10 @@ def visualize(batch):
 class STMOriginal(nn.Module):
     def __init__(self):
         super().__init__()
-        self.backbone = models.resnet50(pretrained=True)
-        for p in self.backbone.parameters():
-            p.requires_grad = False
-        self.stm = STM(self.backbone)
+        stm = nn.DataParallel(STM())
+        # stm.load_state_dict(torch.load('STM_weights.pth'))
+        self.stm = stm.module
+        #self.load_state_dict(torch.load('backup/stm_best.pth'))
 
     def forward(self, inp):
         # visualize(inp)
@@ -295,6 +356,3 @@ class STMOriginal(nn.Module):
         q_logit = self.stm.segment(q_img, k, v)
 
         return (*s_logits, q_logit)
-
-    def predict(self, inp):
-        return self.forward(inp)[-1]
