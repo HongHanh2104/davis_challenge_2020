@@ -1,4 +1,4 @@
-id: STM-YVOS-Triplet
+id: STM-YVOS-Triplet-2
 pretrained: backup/STM-YVOS-Pretrain/best_metric_ModifiedMeanIoU.pth
 seed: 3698
 model:
@@ -30,7 +30,11 @@ dataset:
             phase: debug
             year: 2019
             mode: 2
+<<<<<<< HEAD
             min_skip: 7
+=======
+            max_skip: 2
+>>>>>>> origin/master
         loader:
             name: DataLoader
             args:
@@ -49,6 +53,6 @@ dataset:
             args:
                 batch_size: 1
 trainer:
-    nepochs: 50
+    nepochs: 20
     val_step: 1
     log_step: 1

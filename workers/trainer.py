@@ -78,18 +78,20 @@ class Trainer():
                 print(
                     f'{k} is not improved from {self.best_metric[k]:.6f}.')
 
-        # print('Saving current model...')
-        # torch.save(data, os.path.join(self.save_dir, 'current.pth'))
+        print('Saving current model...')
+        torch.save(data, os.path.join(self.save_dir, 'current.pth'))
 
     # @torch.no_grad()
     def train_epoch(self, epoch, dataloader):
+        print('Training........')
+
         # 0: Record loss during training process
         running_loss = meter.AverageValueMeter()
         total_loss = meter.AverageValueMeter()
         # for m in self.metric.values():
         # m.reset()
         self.model.train()
-        print('Training........')
+        # Setup progress bar
         progress_bar = tqdm(dataloader)
         for i, (inp, lbl) in enumerate(progress_bar):
             # 1: Load img_inputs and labels
@@ -110,9 +112,11 @@ class Trainer():
                 running_loss.add(loss.item())
                 total_loss.add(loss.item())
 
+                # Update loss every log_step or at the end
                 if (i + 1) % self.log_step == 0 or (i + 1) == len(dataloader):
-                    self.tsboard.update_loss(
-                        'train', running_loss.value()[0], epoch * len(dataloader) + i)
+                    self.tsboard.update_loss('train',
+                                             running_loss.value()[0],
+                                             epoch * len(dataloader) + i)
                     running_loss.reset()
 
                 # 8: Update metric
@@ -130,12 +134,16 @@ class Trainer():
 
     @torch.no_grad()
     def val_epoch(self, epoch, dataloader):
+        print('Evaluating........')
+
+        # 0: Record loss during validation
         running_loss = meter.AverageValueMeter()
         for m in self.metric.values():
             m.reset()
 
+        # Set model to evalutation mode
         self.model.eval()
-        print('Evaluating........')
+        # Setup progress bar
         progress_bar = tqdm(dataloader)
         for i, (inp, lbl) in enumerate(progress_bar):
             # 1: Load inputs and labels
@@ -170,6 +178,10 @@ class Trainer():
         for epoch in range(self.nepochs):
             print('\nEpoch {:>3d}'.format(epoch))
             print('-----------------------------------')
+
+            # Note learning rate
+            for i, group in enumerate(self.optimizer.param_groups):
+                self.tsboard.update_lr(i, group['lr'], epoch)
 
             # 1: Training phase
             self.train_epoch(epoch=epoch, dataloader=train_dataloader)
