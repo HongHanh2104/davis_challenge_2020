@@ -9,7 +9,7 @@ optimizer:
     args:
         lr: 0.0001
         momentum: 0.9
-        weight_decay: 0.0005
+        weight_decay: 0.0001
         nesterov: True
 loss:
     name: FSSCELoss
@@ -27,18 +27,16 @@ scheduler:
         verbose: True
 dataset:
     train:
-        name: FSS_Dataset
+        name: FSSRandomDataset
         args:
-            data_dir: ../crnet_simple/data/VOC2012
-            fold: 0
-            #root: data/PASCAL-5i
-            #phase: 0_train
-            #n: 500 # FSS: 64, PASCAL: 3200
-            #is_train: True
+            root: data/PASCAL-5i
+            phase: 0_train
+            n: 500 # FSS: 64, PASCAL: 3200
+            is_train: True
         loader:
             name: DataLoader
             args:
-                batch_size: 16
+                batch_size: 8
                 shuffle: True
     val:
         name: FSS_ValDataset

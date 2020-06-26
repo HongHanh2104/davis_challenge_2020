@@ -117,7 +117,9 @@ class Refine(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, mdim):
         super(Decoder, self).__init__()
-        self.convFM = nn.Conv2d(1024, mdim,
+        #self.aspp = ASPP(1024, 256, 1024)
+
+        self.convFM = nn.Conv2d(2048, mdim,
                                 kernel_size=3, padding=1, stride=1)
         self.ResMM = ResBlock(mdim, mdim)
         self.RF3 = Refine(512, mdim)
@@ -130,6 +132,7 @@ class Decoder(nn.Module):
         # r2: B, D/4, H/4, W/4
         # r3: B, D/2, H/8, W/8
         # r4: B, D, H/16, W/16
+        #r4 = self.aspp(r4)
 
         m4 = self.convFM(r4)  # m4: B, D/4, H/16, W/16
         m4 = self.ResMM(m4)  # m4: B, D/4, H/16, W/16
@@ -147,7 +150,7 @@ class Decoder(nn.Module):
 class Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
-        self.attn = nn.MultiheadAttention(512, 4)
+        self.attn = nn.MultiheadAttention(1024, 8)
 
     def forward(self, m_k, m_v, q_k):
         # m_k: B, Dk, Hm, Wm
@@ -203,29 +206,55 @@ class _Memory(nn.Module):
 
         return mem, p
 
-def positionalencoding2d(d_model, height, width):
-    """
-    :param d_model: dimension of the model
-    :param height: height of the positions
-    :param width: width of the positions
-    :return: d_model*height*width position matrix
-    """
-    if d_model % 4 != 0:
-        raise ValueError("Cannot use sin/cos positional encoding with "
-                         "odd dimension (got dim={:d})".format(d_model))
-    pe = torch.zeros(d_model, height, width)
-    # Each dimension use half of d_model
-    d_model = int(d_model / 2)
-    div_term = torch.exp(torch.arange(0., d_model, 2) *
-                         -(math.log(10000.0) / d_model))
-    pos_w = torch.arange(0., width).unsqueeze(1)
-    pos_h = torch.arange(0., height).unsqueeze(1)
-    pe[0:d_model:2, :, :] = torch.sin(pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, height, 1)
-    pe[1:d_model:2, :, :] = torch.cos(pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, height, 1)
-    pe[d_model::2, :, :] = torch.sin(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
-    pe[d_model + 1::2, :, :] = torch.cos(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
 
-    return pe
+class ASPP(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super().__init__()
+
+        self.conv_1x1_1 = nn.Conv2d(input_dim, hidden_dim, kernel_size=1)
+        self.bn_conv_1x1_1 = nn.BatchNorm2d(hidden_dim)
+
+        self.conv_3x3_1 = nn.Conv2d(input_dim, hidden_dim, kernel_size=3,
+                                    stride=1, padding=6, dilation=6)
+        self.bn_conv_3x3_1 = nn.BatchNorm2d(hidden_dim)
+
+        self.conv_3x3_2 = nn.Conv2d(input_dim, hidden_dim, kernel_size=3,
+                                    stride=1, padding=12, dilation=12)
+        self.bn_conv_3x3_2 = nn.BatchNorm2d(hidden_dim)
+
+        self.conv_3x3_3 = nn.Conv2d(input_dim, hidden_dim, kernel_size=3,
+                                    stride=1, padding=18, dilation=18)
+        self.bn_conv_3x3_3 = nn.BatchNorm2d(hidden_dim)
+
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+
+        self.conv_1x1_2 = nn.Conv2d(input_dim, hidden_dim, kernel_size=1)
+        self.bn_conv_1x1_2 = nn.BatchNorm2d(hidden_dim)
+
+        self.conv_1x1_3 = nn.Conv2d(5 * hidden_dim, output_dim, kernel_size=1)
+        self.bn_conv_1x1_3 = nn.BatchNorm2d(output_dim)
+
+    def forward(self, feature_map):
+        feature_map_h = feature_map.size()[2]
+        feature_map_w = feature_map.size()[3]
+
+        out_1x1 = F.relu(self.bn_conv_1x1_1(self.conv_1x1_1(feature_map)))
+        out_3x3_1 = F.relu(self.bn_conv_3x3_1(self.conv_3x3_1(feature_map)))
+        out_3x3_2 = F.relu(self.bn_conv_3x3_2(self.conv_3x3_2(feature_map)))
+        out_3x3_3 = F.relu(self.bn_conv_3x3_3(self.conv_3x3_3(feature_map)))
+
+        out_img = self.avg_pool(feature_map)
+        out_img = F.relu(self.bn_conv_1x1_2(self.conv_1x1_2(out_img)))
+        out_img = F.interpolate(out_img,
+                                size=(feature_map_h, feature_map_w),
+                                mode="bilinear",
+                                align_corners=False)
+
+        out = torch.cat([out_1x1, out_3x3_1, out_3x3_2, out_3x3_3, out_img], 1)
+        out = F.relu(self.bn_conv_1x1_3(self.conv_1x1_3(out)))
+
+        return out
+
 
 class KeyValue(nn.Module):
     def __init__(self, indim, keydim, valdim):
@@ -236,9 +265,7 @@ class KeyValue(nn.Module):
                                kernel_size=3, padding=1, stride=1)
 
     def forward(self, x):
-        with torch.no_grad():
-            pe = positionalencoding2d(*x.shape[-3:]).to(x.device)
-            x = x + pe
+        return x, x
         # x: B, D, H/16, W/16
         k = self.Key(x)  # k: B, K, H/16, W/16
         v = self.Value(x)  # v: B, V, H/16, W/16
@@ -261,7 +288,7 @@ class STM(nn.Module):
         self.KV_Q_r4 = KeyValue(1024, keydim=512, valdim=512)
 
         self.Memory = Memory()
-        self.Decoder = Decoder(256)
+        self.Decoder = Decoder(512)
 
     def memorize(self, frame, mask):
         # frame: B, C, H, W
