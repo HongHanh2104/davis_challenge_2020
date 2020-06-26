@@ -90,7 +90,6 @@ class Trainer():
         total_loss = meter.AverageValueMeter()
         # for m in self.metric.values():
         # m.reset()
-
         # Switch model to training mode
         self.model.train()
         # Setup progress bar
@@ -113,11 +112,11 @@ class Trainer():
                 # 7: Update loss
                 running_loss.add(loss.item())
                 total_loss.add(loss.item())
-                
+
                 # Update loss every log_step or at the end
                 if (i + 1) % self.log_step == 0 or (i + 1) == len(dataloader):
-                    self.tsboard.update_loss('train', 
-                                             running_loss.value()[0], 
+                    self.tsboard.update_loss('train',
+                                             running_loss.value()[0],
                                              epoch * len(dataloader) + i)
                     running_loss.reset()
 
@@ -137,7 +136,7 @@ class Trainer():
     @torch.no_grad()
     def val_epoch(self, epoch, dataloader):
         print('Evaluating........')
-        
+
         # 0: Record loss during validation
         running_loss = meter.AverageValueMeter()
         for m in self.metric.values():

@@ -154,7 +154,7 @@ class DAVISCoreDataset(data.Dataset):
         img = tvtf.Resize(384)(img)
         mask = tvtf.Resize(384, 0)(mask)
         img, mask = MultiRandomCrop(size=384)((img, mask))
-        #img, mask = MultiRandomAffine(degrees=(-15, 15),
+        # img, mask = MultiRandomAffine(degrees=(-15, 15),
         #                              scale=(0.95, 1.05),
         #                              shear=(-10, 10))((img, mask))
         return img, mask
