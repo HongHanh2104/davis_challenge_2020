@@ -1,3 +1,4 @@
+
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -14,6 +15,6 @@ class TensorboardLogger():
 
     def update_metric(self, phase, metric, value, step):
         self.update_scalar(f'{phase}/{metric}', value, step)
-                
+
     def update_lr(self, gid, value, step):
         self.update_scalar(f'lr/group_{gid}', value, step)
