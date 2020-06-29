@@ -85,7 +85,7 @@ class FSSCoreDataset(data.Dataset):
                 masks[i][masks[i] == obj] = 0
         return masks
 
-    def _filter(self, masks, small_obj_thres=3000):
+    def _filter(self, masks, small_obj_thres=5000):
         masks[0] = self._filter_small_objs(masks[0], small_obj_thres)
         masks = self._filter_excessive_objs(masks)
         return masks
