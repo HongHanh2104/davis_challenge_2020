@@ -7,7 +7,7 @@ model:
 optimizer:
     name: SGD
     args:
-        lr: 0.001
+        lr: 0.0001
         momentum: 0.9
         weight_decay: 0.0001
         nesterov: True
@@ -36,7 +36,7 @@ dataset:
         loader:
             name: DataLoader
             args:
-                batch_size: 8
+                batch_size: 6
                 shuffle: True
     val:
         name: FSS_ValDataset

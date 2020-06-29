@@ -19,6 +19,8 @@ parser.add_argument('-g', type=int, default=None,
                     help='(single) GPU to use (default: None)')
 parser.add_argument('-s', type=int, default=3698,
                     help='random seed (default: 3698)')
+parser.add_argument('-f', type=int, default=0,
+                    help='fold to validate (default: 0)')
 
 args = parser.parse_args()
 
@@ -41,7 +43,10 @@ model.load_state_dict(config['model_state_dict'])
 #			   phase='0_val', 
 #                           n=500, 
 #                           is_train=False)
-dataset = FSS_ValDataset(data_dir='../crnet_simple/data/VOC2012', fold=0)
+dataset = FSS_ValDataset(data_dir='data/PASCAL-5i', 
+                         fold=args.f,
+                         normalize_mean=[0.485, 0.456, 0.406],
+                         normalize_std=[0.229, 0.224, 0.225])
 dataloader = DataLoader(dataset, batch_size=1)
 
 # Metrics

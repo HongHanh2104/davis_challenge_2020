@@ -117,34 +117,24 @@ class Refine(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, mdim):
         super(Decoder, self).__init__()
-        #self.aspp = ASPP(1024, 256, 1024)
-
-        self.convFM = nn.Conv2d(2048, mdim,
+        self.convFM = nn.Conv2d(1024, mdim,
                                 kernel_size=3, padding=1, stride=1)
         self.ResMM = ResBlock(mdim, mdim)
         self.RF3 = Refine(512, mdim)
         self.RF2 = Refine(256, mdim)
 
-        self.pred2 = nn.Conv2d(mdim, 2,
-                               kernel_size=1, padding=0, stride=1)
-
     def forward(self, r4, r3, r2):
         # r2: B, D/4, H/4, W/4
         # r3: B, D/2, H/8, W/8
         # r4: B, D, H/16, W/16
-        #r4 = self.aspp(r4)
 
         m4 = self.convFM(r4)  # m4: B, D/4, H/16, W/16
         m4 = self.ResMM(m4)  # m4: B, D/4, H/16, W/16
         m3 = self.RF3(r3, m4)  # m3: B, D/4, H/8, W/8
         m2 = self.RF2(r2, m3)  # m2: B, D/4, H/4, W/4
 
-        p2 = F.relu(m2)  # p2: B, D/4, H/4, W/4
-        p2 = self.pred2(p2)  # p2: B, N, H/4, W/4
+        p = F.relu(m2)  # p2: B, D/4, H/4, W/4
 
-        p = F.interpolate(p2, scale_factor=4,
-                          mode='bilinear', align_corners=False)
-        # p: B, N, H, W
         return p  # , p2, p3, p4
 
 class Memory(nn.Module):
@@ -289,6 +279,9 @@ class STM(nn.Module):
 
         self.Memory = Memory()
         self.Decoder = Decoder(512)
+        
+        self.pred = nn.Conv2d(512, 2,
+                              kernel_size=1, padding=0, stride=1)
 
     def memorize(self, frame, mask):
         # frame: B, C, H, W
@@ -320,11 +313,16 @@ class STM(nn.Module):
 
         # Read from memory
         mem, _ = self.Memory(keys, values, k4)
-        m4 = torch.cat([mem, v4], dim=1)
+        m4 = mem #torch.cat([mem, v4], dim=1)
         # m4: B, D, H/16, W/16
 
         # Decode
-        logit = self.Decoder(m4, r3, r2)
+        p_M = self.Decoder(m4, r3, r2)
+        p_Q = self.Decoder(v4, r3, r2)
+        p = self.pred(p_M + p_Q)
+        logit = F.interpolate(p, scale_factor=4,
+                              mode='bilinear', align_corners=False)
+        # p: B, N, H, W
         # logit: B, N, H, W
 
         if pad[2] + pad[3] > 0:

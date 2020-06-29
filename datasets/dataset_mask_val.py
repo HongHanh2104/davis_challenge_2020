@@ -37,6 +37,7 @@ class FSS_ValDataset(object):
                     break
             self.query_class_support_list[index]=[query_name,sample_class,support_name]
         self.initiaize_transformation(normalize_mean, normalize_std, input_size)
+        self.fold = fold
 
     def get_new_exist_class_dict(self, fold):
         new_exist_class_list = []
@@ -80,7 +81,7 @@ class FSS_ValDataset(object):
         support_mask = self.ToTensor(Image.open(os.path.join(self.data_dir, 'Binary_map_aug', 'val', str(sample_class), support_name + '.png')))
         query_rgb = self.normalize(self.ToTensor(Image.open(os.path.join(self.data_dir, 'JPEGImages', query_name + '.jpg'))))
         query_mask = self.ToTensor(Image.open(os.path.join(self.data_dir, 'Binary_map_aug', 'val', str(sample_class),query_name + '.png')))
-        return ([support_rgb], [support_mask[0].long()], query_rgb), (sample_class, (support_mask[0].long(), query_mask[0].long()))
+        return ([support_rgb], [support_mask[0].long()], query_rgb), (sample_class - 5 * self.fold, (support_mask[0].long(), query_mask[0].long()))
 
     def __len__(self):
         return 1000
