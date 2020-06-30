@@ -140,7 +140,7 @@ class Decoder(nn.Module):
 class Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
-        self.attn = nn.MultiheadAttention(1024, 8)
+        self.attn = nn.Transformer(1024, 8, 1, 1) #nn.MultiheadAttention(1024, 8)
 
     def forward(self, m_k, m_v, q_k):
         # m_k: B, Dk, Hm, Wm
@@ -160,7 +160,9 @@ class Memory(nn.Module):
         mv = m_v.reshape(B, Dv, Hm*Wm)  # mv: B, D, Hm*Wm
         mv = mv.permute(2, 0, 1) # mv: Hm*Wm, D, B
 
-        mem, p = self.attn(qk, mk, mv) 
+        #mem, p = self.attn(qk, mk, mv) 
+        mem = self.attn(mk, qk)
+        p = mem
         # mem: Hq*Wq, B, D
         # p: B, Hq*Wq, Hm*Wm
         mem = mem.permute(1, 2, 0) # mem: B, D, Hq*Wq
