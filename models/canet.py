@@ -159,10 +159,10 @@ class IterativeOptimizationModule(nn.Module):
 
 class CANet(nn.Module):
 
-    def __init__(self, num_class, extractor, t=4):
+    def __init__(self, num_class, t=0):
         super().__init__()
         self.t = t
-        self.extractor = extractor
+        self.extractor = ResNetExtractor('resnet50')
         # 512 --> 1024
         self.DCM = DenseComparisonModule(extractor_channels=512,
                                          in_channels=256, out_channels=256)
@@ -181,19 +181,20 @@ class CANet(nn.Module):
 
     def forward(self, x):
         support, annotation, query = x
+        support = support[0]
+        annotation = annotation[0]
 
         query_extraction = self.extractor(query)
         support_extraction = self.extractor(support)
 
         x = self.DCM(support_extraction, annotation, query_extraction)
-
         out = self.conv1x1(x)
-
         for i in range(self.t):
             out = self.IOM(x, out)
+        query_out = self.final_layer(out)
+        query_out = F.interpolate(query_out, size=query.shape[-2:], mode='bilinear', align_corners=False)
 
-        final_out = self.final_layer(out)
-        return final_out
+        return (support_out, query_out)
 
 
 def test():

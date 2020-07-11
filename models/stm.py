@@ -122,6 +122,8 @@ class Decoder(nn.Module):
         self.ResMM = ResBlock(mdim, mdim)
         self.RF3 = Refine(512, mdim)
         self.RF2 = Refine(256, mdim)
+        self.pred = nn.Conv2d(512, 2,
+                              kernel_size=1, padding=0, stride=1)
 
     def forward(self, r4, r3, r2):
         # r2: B, D/4, H/4, W/4
@@ -134,13 +136,14 @@ class Decoder(nn.Module):
         m2 = self.RF2(r2, m3)  # m2: B, D/4, H/4, W/4
 
         p = F.relu(m2)  # p2: B, D/4, H/4, W/4
+        p = self.pred(p)
 
         return p  # , p2, p3, p4
 
 class Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
-        self.attn = nn.Transformer(1024, 8, 1, 1) #nn.MultiheadAttention(1024, 8)
+        self.attn = nn.MultiheadAttention(1024, 8)
 
     def forward(self, m_k, m_v, q_k):
         # m_k: B, Dk, Hm, Wm
@@ -160,9 +163,7 @@ class Memory(nn.Module):
         mv = m_v.reshape(B, Dv, Hm*Wm)  # mv: B, D, Hm*Wm
         mv = mv.permute(2, 0, 1) # mv: Hm*Wm, D, B
 
-        #mem, p = self.attn(qk, mk, mv) 
-        mem = self.attn(mk, qk)
-        p = mem
+        mem, p = self.attn(qk, mk, mv) 
         # mem: Hq*Wq, B, D
         # p: B, Hq*Wq, Hm*Wm
         mem = mem.permute(1, 2, 0) # mem: B, D, Hq*Wq
@@ -251,17 +252,9 @@ class ASPP(nn.Module):
 class KeyValue(nn.Module):
     def __init__(self, indim, keydim, valdim):
         super(KeyValue, self).__init__()
-        self.Key = nn.Conv2d(indim, keydim,
-                             kernel_size=3, padding=1, stride=1)
-        self.Value = nn.Conv2d(indim, valdim,
-                               kernel_size=3, padding=1, stride=1)
 
     def forward(self, x):
         return x, x
-        # x: B, D, H/16, W/16
-        k = self.Key(x)  # k: B, K, H/16, W/16
-        v = self.Value(x)  # v: B, V, H/16, W/16
-        return k, v
 
 
 class STM(nn.Module):
@@ -282,8 +275,6 @@ class STM(nn.Module):
         self.Memory = Memory()
         self.Decoder = Decoder(512)
         
-        self.pred = nn.Conv2d(512, 2,
-                              kernel_size=1, padding=0, stride=1)
 
     def memorize(self, frame, mask):
         # frame: B, C, H, W
@@ -321,7 +312,7 @@ class STM(nn.Module):
         # Decode
         p_M = self.Decoder(m4, r3, r2)
         p_Q = self.Decoder(v4, r3, r2)
-        p = self.pred(p_M + p_Q)
+        p = p_M + p_Q
         logit = F.interpolate(p, scale_factor=4,
                               mode='bilinear', align_corners=False)
         # p: B, N, H, W
@@ -379,7 +370,7 @@ class STMOriginal(nn.Module):
             k = torch.cat([k, nk], dim=3)
             v = torch.cat([v, nv], dim=3)
 
-        s_logits = [self.stm.segment(ref_img, k, v) for ref_img in ref_imgs]
+        #s_logits = [self.stm.segment(ref_img, k, v) for ref_img in ref_imgs]
         q_logit = self.stm.segment(q_img, k, v)
 
-        return (*s_logits, q_logit)
+        return (q_logit,)

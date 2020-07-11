@@ -183,7 +183,7 @@ class FSSRandomDataset(FSSCoreDataset):
             ref_masks.append(ref_mask)
 
         return (ref_imgs, ref_masks, query_img), \
-            (self.classes.index(class_id) + 1, (*ref_masks, query_mask))
+            (self.classes.index(class_id) + 1, (query_mask,))
 
     def __len__(self):
         return len(self.classes)

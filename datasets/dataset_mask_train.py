@@ -16,6 +16,7 @@ class FSS_Dataset():
         self.input_size = input_size
         self.history_mask_list = [None] * self.__len__()
         self.prob=prob#probability of sampling history masks=0
+        self.fold = fold
 
     def get_new_exist_class_dict(self, fold):
         new_exist_class_list = []
@@ -122,19 +123,9 @@ class FSS_Dataset():
         query_rgb = query_rgb[:, margin_h:margin_h + input_size, margin_w:margin_w + input_size]
         query_mask = query_mask[0, margin_h:margin_h + input_size, margin_w:margin_w + input_size]
 
+        history_mask=torch.zeros(2,41,41).fill_(0.0)
 
-
-        if self.history_mask_list[index] is None:
-
-            history_mask=torch.zeros(2,41,41).fill_(0.0)
-
-        else:
-            if random.random()>self.prob:
-                history_mask=self.history_mask_list[index]
-            else:
-                history_mask = torch.zeros(2, 41, 41).fill_(0.0)
-
-        return ([support_rgb], [support_mask.long()], query_rgb), (index, (support_mask.long(), query_mask.long()))
+        return ([support_rgb], [support_mask.long()], query_rgb), (sample_class - 5*self.fold, (query_mask.long(),))
 
     def flip(self, flag, img):
         if flag > 0.5:

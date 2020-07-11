@@ -1,4 +1,3 @@
 # from .extractors import *
-from .unet import UNet
-from .resunet import ResidUNet
+from .canet import CANet
 from .stm import STMOriginal

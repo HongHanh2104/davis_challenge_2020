@@ -1,4 +1,4 @@
-id: FSS-STM-PASCAL0
+id: FSS-STM-PASCAL2
 pretrained: null #runs/FSS-STM-PASCAL0-2020_06_25-12_56_56/best_metric_FSSMeanIoU.pth
 seed: 3698
 model:
@@ -7,7 +7,7 @@ model:
 optimizer:
     name: SGD
     args:
-        lr: 0.00001
+        lr: 0.0002
         momentum: 0.9
         weight_decay: 0.0001
         nesterov: True
@@ -30,19 +30,19 @@ dataset:
         name: FSSRandomDataset
         args:
             root: data/PASCAL-5i
-            phase: 0_train
+            phase: 3_train
             n: 100 # FSS: 64, PASCAL: 3200
             is_train: True
         loader:
             name: DataLoader
             args:
-                batch_size: 6
+                batch_size: 4
                 shuffle: True
     val:
         name: FSS_ValDataset
         args:
             data_dir: data/PASCAL-5i
-            fold: 0
+            fold: 3
             normalize_mean: [0.485, 0.456, 0.406]
             normalize_std: [0.229, 0.224, 0.225]
             #root: data/PASCAL-5i
