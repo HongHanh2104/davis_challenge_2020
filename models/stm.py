@@ -57,7 +57,7 @@ class Encoder_M(nn.Module):
         # f: B, C, H, W
         # m: B, H, W
         m = m.unsqueeze(1).float()  # m: B, 1, H, W
-        x = self.conv1(f) + self.conv1_m(m)  # x: B, D/8, H/2, W/2
+        x = self.conv1(f) #+ self.conv1_m(m)  # x: B, D/8, H/2, W/2
         x = self.bn1(x)  # x: B, D/8, H/2, W/2
         c1 = self.relu(x)  # c1: B, D/8, H/2, W/2
         x = self.maxpool(c1)  # x: B, D/8, H/4, W/4
@@ -115,15 +115,15 @@ class Refine(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, mdim):
+    def __init__(self, indim, mdim):
         super(Decoder, self).__init__()
-        self.convFM = nn.Conv2d(1024, mdim,
+        self.convFM = nn.Conv2d(indim, mdim,
                                 kernel_size=3, padding=1, stride=1)
         self.ResMM = ResBlock(mdim, mdim)
         self.RF3 = Refine(512, mdim)
         self.RF2 = Refine(256, mdim)
-        self.pred = nn.Conv2d(512, 2,
-                              kernel_size=1, padding=0, stride=1)
+        self.aspp = ASPP(mdim, 256, mdim)
+        self.pred = nn.Conv2d(512, 2, kernel_size=1)
 
     def forward(self, r4, r3, r2):
         # r2: B, D/4, H/4, W/4
@@ -134,13 +134,13 @@ class Decoder(nn.Module):
         m4 = self.ResMM(m4)  # m4: B, D/4, H/16, W/16
         m3 = self.RF3(r3, m4)  # m3: B, D/4, H/8, W/8
         m2 = self.RF2(r2, m3)  # m2: B, D/4, H/4, W/4
-
+        m2 = self.aspp(m2)
         p = F.relu(m2)  # p2: B, D/4, H/4, W/4
         p = self.pred(p)
 
         return p  # , p2, p3, p4
 
-class Memory(nn.Module):
+class _Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
         self.attn = nn.MultiheadAttention(1024, 8)
@@ -171,7 +171,7 @@ class Memory(nn.Module):
 
         return mem, p
 
-class _Memory(nn.Module):
+class Memory(nn.Module):
     def __init__(self):
         super(Memory, self).__init__()
 
@@ -249,6 +249,18 @@ class ASPP(nn.Module):
         return out
 
 
+class _KeyValue(nn.Module):
+    # Not using location
+    def __init__(self, indim, keydim, valdim):
+        super(KeyValue, self).__init__()
+        self.Key = nn.Conv2d(indim, keydim, kernel_size=3,
+                             padding=1, stride=1)
+        self.Value = nn.Conv2d(indim, valdim, kernel_size=3,
+                               padding=1, stride=1)
+
+    def forward(self, x):
+        return self.Key(x), self.Value(x)
+
 class KeyValue(nn.Module):
     def __init__(self, indim, keydim, valdim):
         super(KeyValue, self).__init__()
@@ -260,20 +272,20 @@ class KeyValue(nn.Module):
 class STM(nn.Module):
     def __init__(self):
         super(STM, self).__init__()
-        self.backbone_M = models.resnet50(pretrained=True)
-        self.backbone_Q = models.resnet50(pretrained=True)
+        self.backbone = models.resnet50(pretrained=True)
+        #self.backbone_Q = models.resnet50(pretrained=True)
 
-        #for p in self.backbone.parameters():
-        #    p.requires_grad = False
+        for p in self.backbone.parameters():
+            p.requires_grad = False
 
-        self.Encoder_M = Encoder_M(self.backbone_M)
-        self.Encoder_Q = Encoder_Q(self.backbone_Q)
+        self.Encoder_M = Encoder_M(self.backbone)
+        self.Encoder_Q = Encoder_Q(self.backbone)
 
-        self.KV_M_r4 = KeyValue(1024, keydim=512, valdim=512)
-        self.KV_Q_r4 = KeyValue(1024, keydim=512, valdim=512)
+        self.KV_M_r4 = KeyValue(1024, keydim=256, valdim=512)
+        self.KV_Q_r4 = KeyValue(1024, keydim=256, valdim=512)
 
         self.Memory = Memory()
-        self.Decoder = Decoder(512)
+        self.Decoder = Decoder(2048, 512)
         
 
     def memorize(self, frame, mask):
@@ -284,9 +296,9 @@ class STM(nn.Module):
         k4, v4 = self.KV_M_r4(r4)
         # k4: B, Dk, H/16, W/16
         # v4: B, Dv, H/16, W/16
-        return k4, v4
+        return k4, v4, mask
 
-    def segment(self, frame, keys, values):
+    def segment(self, frame, keys, values, masks):
         # frame: B, C, H, W
         # keys: B, Dk, Hm, Wm
         # values: B, Dv, Hm, Wm
@@ -305,15 +317,26 @@ class STM(nn.Module):
         # v4: B, Dv, H/16, W/16
 
         # Read from memory
-        mem, _ = self.Memory(keys, values, k4)
-        m4 = mem #torch.cat([mem, v4], dim=1)
+        #mem, _ = self.Memory(keys, values, k4)
+        masks = F.interpolate(masks.unsqueeze(1).float(), values.shape[-2:], mode='bilinear', align_corners=True)
+        if True:
+            h, w = values.shape[-2:]
+            area = F.avg_pool2d(masks, values.shape[-2:]) * h * w + 0.0005
+            z = masks * values
+            z = F.avg_pool2d(input=z, kernel_size=values.shape[-2:]) * h * w / area
+            mem = z.expand(-1, -1, v4.shape[-2], v4.shape[-1])
+        else:
+            keys = keys * 
+            mem, p = self.Memory(keys, values, k4)
+
+        m4 = torch.cat([mem, v4], dim=1)
         # m4: B, D, H/16, W/16
 
         # Decode
         p_M = self.Decoder(m4, r3, r2)
-        p_Q = self.Decoder(v4, r3, r2)
-        p = p_M + p_Q
-        logit = F.interpolate(p, scale_factor=4,
+        #p_Q = self.Decoder(v4, r3, r2)
+        #p = p_M + p_Q
+        logit = F.interpolate(p_M, scale_factor=4,
                               mode='bilinear', align_corners=False)
         # p: B, N, H, W
         # logit: B, N, H, W
@@ -362,7 +385,7 @@ class STMOriginal(nn.Module):
         ref_imgs, ref_masks, q_img = inp
 
         # Memorize the first reference image
-        k, v = self.stm.memorize(ref_imgs[0], ref_masks[0])
+        k, v, mask = self.stm.memorize(ref_imgs[0], ref_masks[0])
 
         # Memorize the rest of the reference images
         for i in range(1, len(ref_imgs) - 1):
@@ -371,6 +394,6 @@ class STMOriginal(nn.Module):
             v = torch.cat([v, nv], dim=3)
 
         #s_logits = [self.stm.segment(ref_img, k, v) for ref_img in ref_imgs]
-        q_logit = self.stm.segment(q_img, k, v)
+        q_logit = self.stm.segment(q_img, k, v, mask)
 
         return (q_logit,)
