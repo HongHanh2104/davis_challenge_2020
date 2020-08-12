@@ -1,0 +1,10 @@
+torch
+torchvision
+torchnet
+tqdm
+Pillow
+yaml
+matplotlib
+numpy
+tensorboard
+pycocotools
