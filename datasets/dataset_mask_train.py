@@ -5,27 +5,30 @@ import torch
 from PIL import Image
 import torchvision.transforms.functional as F
 
+
 class FSS_Dataset():
-    def __init__(self, data_dir, fold, input_size=[321, 321] , normalize_mean=[0, 0, 0],
-                 normalize_std=[1, 1, 1],prob=0.7):
+    def __init__(self, data_dir, fold, input_size=[321, 321], normalize_mean=[0, 0, 0],
+                 normalize_std=[1, 1, 1], prob=0.7):
         # -------------------load data list,[class,video_name]-------------------
         self.data_dir = data_dir
         self.new_exist_class_list = self.get_new_exist_class_dict(fold=fold)
-        self.initiaize_transformation(normalize_mean, normalize_std, input_size)
+        self.initiaize_transformation(
+            normalize_mean, normalize_std, input_size)
         self.binary_pair_list = self.get_binary_pair_list()
         self.input_size = input_size
         self.history_mask_list = [None] * self.__len__()
-        self.prob=prob#probability of sampling history masks=0
+        self.prob = prob  # probability of sampling history masks=0
         self.fold = fold
 
     def get_new_exist_class_dict(self, fold):
         new_exist_class_list = []
 
-        fold_list=[0,1,2,3]
+        fold_list = [0, 1, 2, 3]
         fold_list.remove(fold)
         for fold in fold_list:
 
-            f = open(os.path.join(self.data_dir, 'Binary_map_aug', 'train', 'split%1d_train.txt'%fold))
+            f = open(os.path.join(self.data_dir, 'Binary_map_aug',
+                                  'train', 'split%1d_train.txt' % fold))
             while True:
                 item = f.readline()
                 if item == '':
@@ -38,9 +41,11 @@ class FSS_Dataset():
     def initiaize_transformation(self, normalize_mean, normalize_std, input_size):
         self.ToTensor = torchvision.transforms.ToTensor()
         # self.resize = torchvision.transforms.Resize(input_size)
-        self.normalize = torchvision.transforms.Normalize(normalize_mean, normalize_std)
+        self.normalize = torchvision.transforms.Normalize(
+            normalize_mean, normalize_std)
 
-    def get_binary_pair_list(self):  # a list store all img name that contain that class
+    # a list store all img name that contain that class
+    def get_binary_pair_list(self):
         binary_pair_list = {}
         for Class in range(1, 21):
             binary_pair_list[Class] = self.read_txt(
@@ -60,13 +65,16 @@ class FSS_Dataset():
 
         # give an query index,sample a target class first
         query_name = self.new_exist_class_list[index][0]
-        sample_class = self.new_exist_class_list[index][1]  # random sample a class in this img
+        # random sample a class in this img
+        sample_class = self.new_exist_class_list[index][1]
 
         # print (self.new_exist_class_list)
 
-        support_img_list = self.binary_pair_list[sample_class]  # all img that contain the sample_class
+        # all img that contain the sample_class
+        support_img_list = self.binary_pair_list[sample_class]
         while True:  # random sample a support data
-            support_name = support_img_list[random.randint(0, len(support_img_list) - 1)]
+            support_name = support_img_list[random.randint(
+                0, len(support_img_list) - 1)]
             if support_name != query_name:
                 break
 
@@ -74,9 +82,11 @@ class FSS_Dataset():
 
         input_size = self.input_size[0]
         # random scale and crop for support
-        scaled_size = int(random.uniform(1,1.5)*input_size)
-        scale_transform_mask = torchvision.transforms.Resize([scaled_size, scaled_size], interpolation=Image.NEAREST)
-        scale_transform_rgb = torchvision.transforms.Resize([scaled_size, scaled_size], interpolation=Image.BILINEAR)
+        scaled_size = int(random.uniform(1, 1.5)*input_size)
+        scale_transform_mask = torchvision.transforms.Resize(
+            [scaled_size, scaled_size], interpolation=Image.NEAREST)
+        scale_transform_rgb = torchvision.transforms.Resize(
+            [scaled_size, scaled_size], interpolation=Image.BILINEAR)
         flip_flag = random.random()
         support_rgb = self.normalize(
             self.ToTensor(
@@ -94,14 +104,18 @@ class FSS_Dataset():
 
         margin_h = random.randint(0, scaled_size - input_size)
         margin_w = random.randint(0, scaled_size - input_size)
-        support_rgb = support_rgb[:, margin_h:margin_h + input_size, margin_w:margin_w + input_size]
-        support_mask = support_mask[0, margin_h:margin_h + input_size, margin_w:margin_w + input_size]
+        support_rgb = support_rgb[:, margin_h:margin_h +
+                                  input_size, margin_w:margin_w + input_size]
+        support_mask = support_mask[0, margin_h:margin_h +
+                                    input_size, margin_w:margin_w + input_size]
 
         # random scale and crop for query
         scaled_size = input_size
-        scale_transform_mask = torchvision.transforms.Resize([scaled_size, scaled_size], interpolation=Image.NEAREST)
-        scale_transform_rgb = torchvision.transforms.Resize([scaled_size, scaled_size], interpolation=Image.BILINEAR)
-        flip_flag = 0#random.random()
+        scale_transform_mask = torchvision.transforms.Resize(
+            [scaled_size, scaled_size], interpolation=Image.NEAREST)
+        scale_transform_rgb = torchvision.transforms.Resize(
+            [scaled_size, scaled_size], interpolation=Image.BILINEAR)
+        flip_flag = 0  # random.random()
 
         query_rgb = self.normalize(
             self.ToTensor(
@@ -120,10 +134,10 @@ class FSS_Dataset():
         margin_h = random.randint(0, scaled_size - input_size)
         margin_w = random.randint(0, scaled_size - input_size)
 
-        query_rgb = query_rgb[:, margin_h:margin_h + input_size, margin_w:margin_w + input_size]
-        query_mask = query_mask[0, margin_h:margin_h + input_size, margin_w:margin_w + input_size]
-
-        history_mask=torch.zeros(2,41,41).fill_(0.0)
+        query_rgb = query_rgb[:, margin_h:margin_h +
+                              input_size, margin_w:margin_w + input_size]
+        query_mask = query_mask[0, margin_h:margin_h +
+                                input_size, margin_w:margin_w + input_size]
 
         return ([support_rgb], [support_mask.long()], query_rgb), (sample_class - 5*self.fold, (query_mask.long(),))
 
@@ -135,5 +149,3 @@ class FSS_Dataset():
 
     def __len__(self):
         return len(self.new_exist_class_list)
-
-

@@ -57,7 +57,7 @@ class Encoder_M(nn.Module):
         # f: B, C, H, W
         # m: B, H, W
         m = m.unsqueeze(1).float()  # m: B, 1, H, W
-        x = self.conv1(f) #+ self.conv1_m(m)  # x: B, D/8, H/2, W/2
+        x = self.conv1(f)  # + self.conv1_m(m)  # x: B, D/8, H/2, W/2
         x = self.bn1(x)  # x: B, D/8, H/2, W/2
         c1 = self.relu(x)  # c1: B, D/8, H/2, W/2
         x = self.maxpool(c1)  # x: B, D/8, H/4, W/4
@@ -122,7 +122,7 @@ class Decoder(nn.Module):
         self.ResMM = ResBlock(mdim, mdim)
         self.RF3 = Refine(512, mdim)
         self.RF2 = Refine(256, mdim)
-        self.aspp = ASPP(mdim, 256, mdim)
+        # self.aspp = ASPP(mdim, 256, mdim)
         self.pred = nn.Conv2d(512, 2, kernel_size=1)
 
     def forward(self, r4, r3, r2):
@@ -134,15 +134,16 @@ class Decoder(nn.Module):
         m4 = self.ResMM(m4)  # m4: B, D/4, H/16, W/16
         m3 = self.RF3(r3, m4)  # m3: B, D/4, H/8, W/8
         m2 = self.RF2(r2, m3)  # m2: B, D/4, H/4, W/4
-        m2 = self.aspp(m2)
+        # m2 = self.aspp(m2)
         p = F.relu(m2)  # p2: B, D/4, H/4, W/4
         p = self.pred(p)
 
         return p  # , p2, p3, p4
 
+
 class _Memory(nn.Module):
     def __init__(self):
-        super(Memory, self).__init__()
+        super().__init__()
         self.attn = nn.MultiheadAttention(1024, 8)
 
     def forward(self, m_k, m_v, q_k):
@@ -158,22 +159,23 @@ class _Memory(nn.Module):
         mk = mk.permute(2, 0, 1)  # mk: Hm*Wm, B, D
 
         qk = q_k.reshape(B, Dk, Hq*Wq)  # qk: B, D, Hq*Wq
-        qk = qk.permute(2, 0, 1) # qk: Hq*Wq, B, D
+        qk = qk.permute(2, 0, 1)  # qk: Hq*Wq, B, D
 
         mv = m_v.reshape(B, Dv, Hm*Wm)  # mv: B, D, Hm*Wm
-        mv = mv.permute(2, 0, 1) # mv: Hm*Wm, D, B
+        mv = mv.permute(2, 0, 1)  # mv: Hm*Wm, D, B
 
-        mem, p = self.attn(qk, mk, mv) 
+        mem, p = self.attn(qk, mk, mv)
         # mem: Hq*Wq, B, D
         # p: B, Hq*Wq, Hm*Wm
-        mem = mem.permute(1, 2, 0) # mem: B, D, Hq*Wq
+        mem = mem.permute(1, 2, 0)  # mem: B, D, Hq*Wq
         mem = mem.reshape(B, Dk, Hq, Wq)
 
         return mem, p
 
+
 class Memory(nn.Module):
     def __init__(self):
-        super(Memory, self).__init__()
+        super().__init__()
 
     def forward(self, m_k, m_v, q_k):
         # m_k: B, Dk, Hm, Wm
@@ -261,6 +263,7 @@ class _KeyValue(nn.Module):
     def forward(self, x):
         return self.Key(x), self.Value(x)
 
+
 class KeyValue(nn.Module):
     def __init__(self, indim, keydim, valdim):
         super(KeyValue, self).__init__()
@@ -286,7 +289,6 @@ class STM(nn.Module):
 
         self.Memory = Memory()
         self.Decoder = Decoder(2048, 512)
-        
 
     def memorize(self, frame, mask):
         # frame: B, C, H, W
@@ -318,14 +320,16 @@ class STM(nn.Module):
 
         # Read from memory
         #mem, _ = self.Memory(keys, values, k4)
-        masks = F.interpolate(masks.unsqueeze(1).float(), values.shape[-2:], mode='bilinear', align_corners=True)
+        masks = F.interpolate(masks.unsqueeze(1).float(
+        ), values.shape[-2:], mode='bilinear', align_corners=True)
         if True:
             h, w = values.shape[-2:]
             area = F.avg_pool2d(masks, values.shape[-2:]) * h * w + 0.0005
             z = masks * values
-            z = F.avg_pool2d(input=z, kernel_size=values.shape[-2:]) * h * w / area
+            z = F.avg_pool2d(
+                input=z, kernel_size=values.shape[-2:]) * h * w / area
             mem = z.expand(-1, -1, v4.shape[-2], v4.shape[-1])
-        else: 
+        else:
             mem, p = self.Memory(keys, values, k4)
 
         m4 = torch.cat([mem, v4], dim=1)
@@ -375,7 +379,7 @@ class STMOriginal(nn.Module):
         stm = nn.DataParallel(STM())
         # stm.load_state_dict(torch.load('STM_weights.pth'))
         self.stm = stm.module
-        #self.load_state_dict(torch.load('backup/stm_best.pth'))
+        # self.load_state_dict(torch.load('backup/stm_best.pth'))
 
     def forward(self, inp):
         # visualize(inp)

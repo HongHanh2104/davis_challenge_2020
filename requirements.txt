@@ -1,0 +1,8 @@
+yaml
+torch
+torchvision
+torchnet
+tqdm
+tensorboard
+matplotlib
+Pillow

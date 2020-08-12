@@ -149,7 +149,6 @@ class FSSRandomDataset(FSSCoreDataset):
         self.n = n
         self.classes = self.classes * self.n
 
-        self.history = open(f'{FSSRandomDataset.count}.txt', 'w')
         FSSRandomDataset.count += 1
 
     def __getitem__(self, idx):
@@ -161,11 +160,9 @@ class FSSRandomDataset(FSSCoreDataset):
         anno_ref_names = [os.path.join(class_id, x)
                           for x in imgs[:-1]]
 
-        self.history.write(f'{anno_query_name},{",".join(anno_ref_names)}\n')
-
         query_img, query_mask = self._load_frame(anno_query_name,
                                                  self._augmentation)
-        #if self.is_train:
+        # if self.is_train:
         #    query_mask = self._filter_small_objs(query_mask, 5000)
         #    if query_mask.max() == 0:
         #        return self.__getitem__(idx)

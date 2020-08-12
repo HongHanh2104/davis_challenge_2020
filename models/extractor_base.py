@@ -1,10 +1,5 @@
-####################################################################
-#   From vltheanh: 
-# https://github.com/vltanh/pytorch-template/blob/master/models/extractors/extractor_network.py
+import torch.nn as nn
 
-####################################################################
-
-import torch.nn as nn 
 
 class ExtractorNetwork(nn.Module):
     def __init__(self):
@@ -16,4 +11,3 @@ class ExtractorNetwork(nn.Module):
 
     def get_embedding(self, x):
         return self.forward(x)
-
