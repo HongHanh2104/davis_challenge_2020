@@ -325,8 +325,7 @@ class STM(nn.Module):
             z = masks * values
             z = F.avg_pool2d(input=z, kernel_size=values.shape[-2:]) * h * w / area
             mem = z.expand(-1, -1, v4.shape[-2], v4.shape[-1])
-        else:
-            keys = keys * 
+        else: 
             mem, p = self.Memory(keys, values, k4)
 
         m4 = torch.cat([mem, v4], dim=1)
