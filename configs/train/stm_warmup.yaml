@@ -1,38 +1,19 @@
 id: STM-YVOS-WarmUp
-pretrained: null #backup/STM-WarmUp-YVOS/best_metric_MeanIoU.pth
+pretrained: backup/STM-YVOS-Pretrain/best_metric_ModifiedMeanIoU.pth
 seed: 3698
 model:
     name: STMOriginal
     args:
 optimizer:
-    name: SGD
+    name: Adam
     args:
-        lr: 0.0005
-        momentum: 0.9
-        nesterov: True
+        lr: 0.0001
 loss:
     name: MultiCELoss
-    #name: CrossEntropyLoss
-    #name: MixedLoss
-    #args:
-    #    losses:
-    #        - name: FocalLoss
-    #          args:
-    #            gamma: 2
-    #        - name: DiceLoss
-    #          args:
-    #        - name: CrossEntropyLoss
-    #          args:
 metric:
     - name: ModifiedMeanIoU
       args:
           nclasses: 11
-    #- name: PixelAccuracy
-    #  args:
-    #      nclasses: 2
-    #- name: DiceScore
-    #  args:
-    #      nclasses: 2
 scheduler:
     name: ReduceLROnPlateau
     args:
